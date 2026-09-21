@@ -1,13 +1,9 @@
 import { createClient } from '@supabase/supabase-js'
 
-const supabaseUrl = import.meta.env.VITE_SUPABASE_URL
-const supabasePublishableKey = import.meta.env.VITE_SUPABASE_PUBLISHABLE_KEY
-
-if (!supabaseUrl || !supabasePublishableKey) {
-  console.warn('Chybí VITE_SUPABASE_URL nebo VITE_SUPABASE_PUBLISHABLE_KEY.')
-}
+const supabaseUrl = 'https://rhewjraklopujpssayzg.supabase.co'
+const supabasePublishableKey = 'sb_publishable_W2acY0LwN0B4BignBD_VmQ_V1JPPVTF'
 
 export const supabase = createClient(
-  supabaseUrl || '',
-  supabasePublishableKey || ''
+  supabaseUrl,
+  supabasePublishableKey
 )
