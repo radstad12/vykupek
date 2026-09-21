@@ -2254,191 +2254,29 @@
   const CATEGORIES_KEY =
     "pointo_categories_v1";
 
+  /* Jednorázové vyčištění původního katalogu. */
+  const CATALOG_RESET_KEY =
+    "pointo_catalog_reset_v1";
+
+  if(!localStorage.getItem(CATALOG_RESET_KEY)){
+    localStorage.removeItem(PRODUCTS_KEY);
+    localStorage.removeItem(CATEGORIES_KEY);
+    localStorage.setItem(CATALOG_RESET_KEY, "1");
+  }
+
 
   /* ========================================
      VÝCHOZÍ KATEGORIE
      ======================================== */
 
-  const defaultCategories = [
-
-    {
-      id:"cennosti",
-      name:"Cennosti",
-      icon:"💎"
-    },
-
-    {
-      id:"zbrane",
-      name:"Zbraně",
-      icon:"🔫"
-    },
-
-    {
-      id:"zahradnictvi",
-      name:"Zahradnictví",
-      icon:"🌿"
-    },
-
-    {
-      id:"chemikalie",
-      name:"Chemikálie",
-      icon:"⚗️"
-    },
-
-    {
-      id:"naradi",
-      name:"Nářadí",
-      icon:"🛠️"
-    },
-
-    {
-      id:"karty",
-      name:"Karty",
-      icon:"🃏"
-    }
-
-  ];
+  const defaultCategories = [];
 
 
   /* ========================================
      VÝCHOZÍ PRODUKTY
      ======================================== */
 
-  const defaultProducts = [
-
-    {
-      id: crypto.randomUUID(),
-      name:"Baterky na zbraň",
-      price:250,
-      sale_price:0,
-      image:"",
-      category:"zbrane",
-      admin_item:false,
-      active:true
-    },
-
-    {
-      id: crypto.randomUUID(),
-      name:"Zlaté mince",
-      price:50,
-      sale_price:0,
-      image:"",
-      category:"cennosti",
-      admin_item:false,
-      active:true
-    },
-
-    {
-      id: crypto.randomUUID(),
-      name:"Zvláštní karty",
-      price:550,
-      sale_price:0,
-      image:"",
-      category:"karty",
-      admin_item:false,
-      active:true
-    },
-
-    {
-      id: crypto.randomUUID(),
-      name:"Zlaté prsteny",
-      price:80,
-      sale_price:0,
-      image:"",
-      category:"cennosti",
-      admin_item:false,
-      active:true
-    },
-
-    {
-      id: crypto.randomUUID(),
-      name:"Náhrdelníky",
-      price:70,
-      sale_price:0,
-      image:"",
-      category:"cennosti",
-      admin_item:false,
-      active:true
-    },
-
-    {
-      id: crypto.randomUUID(),
-      name:"Hodinky",
-      price:75,
-      sale_price:0,
-      image:"",
-      category:"cennosti",
-      admin_item:false,
-      active:true
-    },
-
-    {
-      id: crypto.randomUUID(),
-      name:"Klenoty",
-      price:60,
-      sale_price:0,
-      image:"",
-      category:"cennosti",
-      admin_item:false,
-      active:true
-    },
-
-    {
-      id: crypto.randomUUID(),
-      name:"Autodíly",
-      price:10,
-      sale_price:0,
-      image:"",
-      category:"naradi",
-      admin_item:false,
-      active:true
-    },
-
-    {
-      id: crypto.randomUUID(),
-      name:"Semínka",
-      price:45,
-      sale_price:0,
-      image:"",
-      category:"zahradnictvi",
-      admin_item:false,
-      active:true
-    },
-
-    {
-      id: crypto.randomUUID(),
-      name:"Golfová hůl",
-      price:125,
-      sale_price:0,
-      image:"",
-      category:"naradi",
-      admin_item:false,
-      active:true
-    },
-
-    {
-      id: crypto.randomUUID(),
-      name:"Sada na čištění zbraní",
-      price:50,
-      sale_price:0,
-      image:"",
-      category:"zbrane",
-      admin_item:false,
-      active:true
-    },
-
-    {
-      id: crypto.randomUUID(),
-      name:"Kulečníkové tágo",
-      price:120,
-      sale_price:0,
-      image:"",
-      category:"naradi",
-      admin_item:false,
-      active:true
-    }
-
-  ];
+  const defaultProducts = [];
 
 
   /* ========================================
