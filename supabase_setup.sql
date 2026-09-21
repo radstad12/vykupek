@@ -17,6 +17,7 @@ create table if not exists public.products (
   image text,
   active boolean not null default true,
   admin_item boolean not null default false,
+  required_role_id text,
   sort_order integer not null default 0,
   created_at timestamptz not null default now(),
   updated_at timestamptz not null default now()
@@ -27,6 +28,7 @@ create table if not exists public.bonuses (
   threshold numeric not null default 0,
   bonus_type text not null default 'percent',
   bonus_value numeric not null default 0,
+  discord_role_id text,
   active boolean not null default true,
   created_at timestamptz not null default now(),
   updated_at timestamptz not null default now()
@@ -34,6 +36,8 @@ create table if not exists public.bonuses (
 
 create index if not exists products_category_id_idx on public.products(category_id);
 create index if not exists products_sort_order_idx on public.products(sort_order);
+create index if not exists products_required_role_id_idx on public.products(required_role_id);
+create index if not exists bonuses_discord_role_id_idx on public.bonuses(discord_role_id);
 create index if not exists categories_sort_order_idx on public.categories(sort_order);
 
 alter table public.categories enable row level security;

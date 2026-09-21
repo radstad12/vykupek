@@ -1494,7 +1494,82 @@
         justify-content:flex-start;
       }
     }
-  </style>
+  
+    /* ===========================
+       DISCORD LOGIN LOCK
+       =========================== */
+    #discordGate{
+      position:fixed;
+      inset:0;
+      z-index:99999;
+      display:flex;
+      align-items:center;
+      justify-content:center;
+      padding:24px;
+      background:rgba(4,1,7,.86);
+      backdrop-filter:blur(14px);
+    }
+    #discordGate.hidden{display:none;}
+    .discord-gate-card{
+      width:min(460px,100%);
+      padding:34px;
+      text-align:center;
+      border:1px solid rgba(216,165,26,.7);
+      border-radius:22px;
+      background:linear-gradient(145deg,rgba(31,12,39,.98),rgba(11,4,16,.99));
+      box-shadow:0 30px 100px #000b, 0 0 50px rgba(167,44,255,.15);
+    }
+    .discord-gate-card h2{
+      margin:0 0 10px;
+      color:var(--gold2);
+      font-size:28px;
+    }
+    .discord-gate-card p{
+      margin:0 0 22px;
+      color:var(--muted);
+      line-height:1.6;
+    }
+    .discord-login-btn,
+    .order-btn{
+      border:0;
+      border-radius:12px;
+      padding:12px 18px;
+      font-weight:900;
+      cursor:pointer;
+    }
+    .discord-login-btn{
+      width:100%;
+      color:#fff;
+      background:linear-gradient(90deg,#5865f2,#7c5cff);
+      box-shadow:0 10px 30px rgba(88,101,242,.25);
+    }
+    .discord-login-btn:hover,
+    .order-btn:hover{filter:brightness(1.08);}
+    .discord-user{
+      margin-top:10px;
+      color:#bfaecc;
+      font-size:12px;
+    }
+    .order-wrap{
+      width:100%;
+      margin-top:18px;
+      display:flex;
+      justify-content:center;
+    }
+    .order-btn{
+      color:#fff;
+      background:linear-gradient(90deg,#8e17d4,#d426ff);
+      box-shadow:0 10px 30px #a919ff33;
+      min-width:220px;
+    }
+    .order-btn:disabled{opacity:.55;cursor:not-allowed;}
+    .role-note{
+      color:#bfaecc;
+      font-size:11px;
+      margin-top:8px;
+    }
+
+</style>
 </head>
 
 <body>
@@ -1515,6 +1590,17 @@
   ODHLÁSIT
 </button>
 
+
+
+<div id="discordGate">
+  <div class="discord-gate-card">
+    <div style="font-size:44px;margin-bottom:8px;">🔐</div>
+    <h2>Nejdříve se přihlas přes Discord</h2>
+    <p>Pro zobrazení nabídky, bonusů a vytvoření objednávky se musíš nejdřív přihlásit přes Discord.</p>
+    <button class="discord-login-btn" type="button" onclick="discordLogin()">Přihlásit přes Discord</button>
+    <div id="discordGateError" class="discord-user"></div>
+  </div>
+</div>
 
 <main class="page">
 
@@ -1665,6 +1751,13 @@
   >
     Vyberte množství produktů
   </div>
+
+  <div class="order-wrap">
+    <button id="orderButton" class="order-btn" type="button" onclick="createDiscordTicket()" disabled>
+      Objednat výkup
+    </button>
+  </div>
+  <div id="orderStatus" class="role-note"></div>
 
 
   <div
@@ -1990,6 +2083,14 @@
 
           </div>
 
+          <div class="field full">
+            <label>
+              Discord role ID pro zobrazení produktu (volitelné)
+            </label>
+            <input id="pRequiredRoleId" placeholder="např. 123456789012345678">
+            <div class="hint">Prázdné = produkt vidí každý přihlášený uživatel.</div>
+          </div>
+
         </div>
 
 
@@ -2105,6 +2206,10 @@
 
               <th>
                 Bonus %
+              </th>
+
+              <th>
+                Discord role ID
               </th>
 
               <th></th>
@@ -2440,7 +2545,8 @@
         product => ({
           ...product,
           sale_price:Number(product.sale_price ?? 0),
-          admin_item:Boolean(product.admin_item)
+          admin_item:Boolean(product.admin_item),
+          required_role_id:String(product.required_role_id || "")
         })
       );
 
@@ -2629,6 +2735,11 @@
   }
 
 
+  function isDiscordOwner(){
+    return Array.isArray(window.pointoDiscordRoles) &&
+      window.pointoDiscordRoles.includes('1551640037828075620');
+  }
+
   function isAdmin(){
 
     return(
@@ -2725,6 +2836,11 @@
       )
       .checked = false;
 
+    document
+      .getElementById(
+        "pRequiredRoleId"
+      )
+      .value = "";
 
     document
       .getElementById(
@@ -2831,6 +2947,13 @@
         )
         .checked;
 
+    const requiredRoleId =
+      document
+        .getElementById(
+          "pRequiredRoleId"
+        )
+        .value
+        .trim();
 
     const category =
       document
@@ -2910,6 +3033,8 @@
         item.admin_item =
           adminItem;
 
+        item.required_role_id =
+          requiredRoleId;
 
         if(image){
 
@@ -2950,7 +3075,10 @@
           active,
 
         admin_item:
-          adminItem
+          adminItem,
+
+        required_role_id:
+          requiredRoleId
 
       });
 
@@ -3062,6 +3190,12 @@
           item.admin_item
         );
 
+    document
+      .getElementById(
+        "pRequiredRoleId"
+      )
+      .value =
+        item.required_role_id || "";
 
     document
       .getElementById(
@@ -3263,6 +3397,7 @@
           p.active &&
           (
             isAdmin() ||
+            isDiscordOwner() ||
             !p.admin_item
           )
       );
@@ -3966,29 +4101,14 @@
     total
   ){
 
-    const sorted =
-      [...bonuses]
-        .sort(
-          (a,b) =>
-            Number(b.min) -
-            Number(a.min)
-        );
+    if (window.pointoDiscordSession &&
+        Number(window.pointoDiscordSession.bonusPercent || 0) > 0) {
+      return Number(window.pointoDiscordSession.bonusPercent) / 100;
+    }
 
-
-    const match =
-      sorted.find(
-        x =>
-          total >=
-          Number(x.min)
-      );
-
-
-    return match
-      ? Number(match.percent) / 100
-      : 0;
+    return 0;
 
   }
-
 
   /* ========================================
      VÝPOČET
@@ -4006,6 +4126,7 @@
           p.active &&
           (
             isAdmin() ||
+            isDiscordOwner() ||
             !p.admin_item
           )
       )
@@ -4257,6 +4378,21 @@
 
               </td>
 
+              <td>
+                <input
+                  type="text"
+                  value="${escapeHtml(b.discord_role_id || '')}"
+                  placeholder="role ID"
+                  onchange="
+                    updateBonus(
+                      ${i},
+                      'discord_role_id',
+                      this.value
+                    )
+                  "
+                >
+              </td>
+
 
               <td>
 
@@ -4287,7 +4423,9 @@
   ){
 
     bonuses[index][key] =
-      Number(value);
+      key === 'discord_role_id'
+        ? String(value || '').trim()
+        : Number(value);
 
   }
 
@@ -4345,7 +4483,10 @@
               Number(x.min),
 
             percent:
-              Number(x.percent) || 0
+              Number(x.percent) || 0,
+
+            discord_role_id:
+              String(x.discord_role_id || "").trim()
 
           })
         )
@@ -4532,7 +4673,8 @@
                 product => ({
                   ...product,
                   sale_price:Number(product.sale_price ?? 0),
-                  admin_item:Boolean(product.admin_item)
+                  admin_item:Boolean(product.admin_item),
+          required_role_id:String(product.required_role_id || "")
                 })
               );
 
@@ -4737,6 +4879,7 @@
         category: row.category_id || '',
         active: row.active !== false,
         admin_item: Boolean(row.admin_item),
+        required_role_id: String(row.required_role_id || ''),
         sort_order: Number(row.sort_order || 0)
       })),
       bonuses: (b.data || []).map(row => ({
@@ -4744,7 +4887,8 @@
         min: Number(row.threshold || 0),
         percent: row.bonus_type === 'percent' ? Number(row.bonus_value || 0) : 0,
         bonus_type: row.bonus_type || 'percent',
-        bonus_value: Number(row.bonus_value || 0)
+        bonus_value: Number(row.bonus_value || 0),
+        discord_role_id: String(row.discord_role_id || '')
       }))
     }
   }
@@ -4792,6 +4936,7 @@
         image: p.image || null,
         active: p.active !== false,
         admin_item: Boolean(p.admin_item),
+        required_role_id: String(p.required_role_id || ''),
         sort_order: Number(p.sort_order ?? index)
       }
       if (isUuid(p.id)) row.id = p.id
@@ -4816,6 +4961,7 @@
       threshold: Number(b.min || 0),
       bonus_type: b.bonus_type || 'percent',
       bonus_value: Number(b.bonus_type === 'fixed' ? (b.bonus_value || 0) : (b.percent || 0)),
+      discord_role_id: String(b.discord_role_id || ''),
       active: true
     })).map(row => {
       if (!row.id) delete row.id
@@ -4911,3 +5057,144 @@
   })()
 })();
 </script>
+
+<script>
+/* =====================================================
+   DISCORD AUTH + ROLE VISIBILITY + TICKETS
+   ===================================================== */
+window.POINT0_DISCORD_API = window.POINT0_DISCORD_API || 'https://pointo-pawnshop-api.mahusvi.workers.dev';
+
+let pointoDiscordSession = null;
+let pointoDiscordUser = null;
+let pointoDiscordRoles = [];
+
+function discordToken(){
+  return localStorage.getItem('pointo_discord_session') || '';
+}
+function setDiscordToken(token){
+  if(token) localStorage.setItem('pointo_discord_session', token);
+  else localStorage.removeItem('pointo_discord_session');
+}
+function hasDiscordRole(roleId){
+  return !!roleId && pointoDiscordRoles.includes(String(roleId));
+}
+function canSeeProductDiscord(p){
+  const owner = hasDiscordRole('1551640037828075620');
+  if (owner) return true;
+  if (p.category === 'skryte') return false;
+  if (p.admin_item) return false;
+  if (!p.required_role_id) return true;
+  return hasDiscordRole(p.required_role_id);
+}
+function discordLogin(){
+  const returnUrl = window.location.href.split('#')[0];
+  window.location.href = window.POINT0_DISCORD_API + '/auth/login?return=' + encodeURIComponent(returnUrl);
+}
+async function loadDiscordSession(){
+  const hash = new URLSearchParams(window.location.hash.replace(/^#/, ''));
+  const callbackToken = hash.get('discord_session');
+  if(callbackToken){
+    setDiscordToken(callbackToken);
+    history.replaceState(null, '', window.location.pathname + window.location.search);
+  }
+  const token = discordToken();
+  if(!token){
+    lockDiscordGate();
+    return;
+  }
+  try{
+    const response = await fetch(window.POINT0_DISCORD_API + '/api/me', {
+      headers: { Authorization: 'Bearer ' + token }
+    });
+    if(!response.ok) throw new Error('Session vypršela.');
+    const data = await response.json();
+    pointoDiscordSession = data;
+    window.pointoDiscordSession = data;
+    pointoDiscordUser = data.user;
+    pointoDiscordRoles = Array.isArray(data.roles) ? data.roles : [];
+    window.pointoDiscordRoles = pointoDiscordRoles;
+    document.getElementById('discordGate').classList.add('hidden');
+    document.getElementById('orderButton').disabled = false;
+    document.getElementById('orderStatus').textContent =
+      'Přihlášen jako ' + (data.user.global_name || data.user.username || 'Discord uživatel') +
+      (Number(data.bonusPercent || 0) > 0 ? ' • bonus role: +' + Number(data.bonusPercent) + ' %' : '');
+    applyDiscordCatalog();
+  }catch(error){
+    console.error(error);
+    setDiscordToken('');
+    lockDiscordGate(error.message || 'Přihlášení se nepodařilo.');
+  }
+}
+function lockDiscordGate(message){
+  document.getElementById('discordGate').classList.remove('hidden');
+  document.getElementById('orderButton').disabled = true;
+  document.getElementById('discordGateError').textContent = message || '';
+  document.body.style.overflow = 'hidden';
+}
+function applyDiscordCatalog(){
+  document.body.style.overflow = '';
+  try{
+    renderProducts();
+    calculateTotal();
+  }catch(e){}
+}
+async function createDiscordTicket(){
+  if(!pointoDiscordSession) return discordLogin();
+  const items = [];
+  (Array.isArray(products) ? products : []).forEach(p => {
+    if(!p.active || !canSeeProductDiscord(p)) return;
+    const input = document.getElementById('q_' + p.id);
+    const quantity = input ? Math.max(0, parseInt(input.value) || 0) : 0;
+    if(quantity > 0) items.push({id:p.id, quantity});
+  });
+  if(!items.length){
+    alert('Nejdříve vyber alespoň jednu věc a její množství.');
+    return;
+  }
+  const button = document.getElementById('orderButton');
+  const status = document.getElementById('orderStatus');
+  button.disabled = true;
+  status.textContent = 'Vytvářím ticket…';
+  try{
+    const response = await fetch(window.POINT0_DISCORD_API + '/api/tickets', {
+      method:'POST',
+      headers:{
+        'Content-Type':'application/json',
+        Authorization:'Bearer ' + discordToken()
+      },
+      body:JSON.stringify({items})
+    });
+    const data = await response.json();
+    if(!response.ok) throw new Error(data.error || 'Ticket se nepodařilo vytvořit.');
+    status.textContent = 'Ticket vytvořen. Přesměrovávám na Discord…';
+    window.open(data.channelUrl, '_blank', 'noopener');
+  }catch(error){
+    console.error(error);
+    status.textContent = error.message || 'Ticket se nepodařilo vytvořit.';
+    alert(status.textContent);
+  }finally{
+    button.disabled = false;
+  }
+}
+const originalRenderProductsForDiscord = window.renderProducts;
+if(typeof originalRenderProductsForDiscord === 'function'){
+  window.renderProducts = function(){
+    const before = products;
+    try{
+      if(pointoDiscordSession){
+        products = (Array.isArray(before) ? before : []).filter(canSeeProductDiscord);
+        originalRenderProductsForDiscord();
+      }else{
+        products = [];
+        originalRenderProductsForDiscord();
+      }
+    }finally{
+      products = before;
+    }
+  };
+}
+window.addEventListener('load', loadDiscordSession);
+</script>
+
+</body>
+</html>
