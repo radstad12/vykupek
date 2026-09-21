@@ -1,0 +1,29 @@
+rules_version = '2';
+
+service cloud.firestore {
+  match /databases/{database}/documents {
+
+    // Full product records contain internal sale_price.
+    // Only authenticated admin users can access them.
+    match /products/{productId} {
+      allow read, write: if request.auth != null;
+    }
+
+    // Public mirror intentionally contains no sale_price.
+    // Visitors can read it in realtime. Only authenticated admins can change it.
+    match /products_public/{productId} {
+      allow read: if true;
+      allow create, update, delete: if request.auth != null;
+    }
+
+    match /categories/{categoryId} {
+      allow read: if true;
+      allow create, update, delete: if request.auth != null;
+    }
+
+    match /bonuses/{bonusId} {
+      allow read: if true;
+      allow create, update, delete: if request.auth != null;
+    }
+  }
+}
