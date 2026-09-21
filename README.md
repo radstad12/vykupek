@@ -1,21 +1,15 @@
-# POINTO Pawnshop
+# POINTO LLC — Pawnshop
 
-Verze napojená na Supabase.
+Vite project for POINTO LLC pawnshop. The visible application is `index.html`.
 
-## Spuštění
+## Local run
 
-1. Otevři tuto složku ve VS Code.
-2. V Terminalu spusť:
-
-```bash
-npm install
-npm run dev
-```
-
-Projekt už obsahuje `.env` s nastavením Supabase. Pro GitHub používej `.env.example`; skutečný `.env` je v `.gitignore`.
+1. Copy `.env.example` to `.env` and fill in the Supabase URL and publishable key.
+2. Run `npm install`.
+3. Run `npm run dev`.
 
 ## Supabase
 
-Databáze používá tabulky `categories`, `products` a `bonuses`. Synchronizace probíhá přes Supabase Realtime.
+Run `supabase_setup.sql` in Supabase SQL Editor once. The app synchronizes categories, products, prices, sale prices and bonus tiers through Supabase Realtime.
 
-Admin přihlášení zůstává součástí aplikace. Supabase se používá jako centrální úložiště dat.
+The admin login is the existing frontend login from the original app and does not create a separate Supabase admin account.

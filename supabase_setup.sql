@@ -1,6 +1,3 @@
--- Pokud už jsi původní SQL skript spustil, tento soubor není potřeba spouštět znovu.
--- Je to pouze kompletní definice databáze pro nový projekt.
-
 create table if not exists public.categories (
   id text primary key,
   name text not null,
@@ -35,57 +32,38 @@ create table if not exists public.bonuses (
   updated_at timestamptz not null default now()
 );
 
-create index if not exists products_category_id_idx
-  on public.products(category_id);
-
-create index if not exists products_sort_order_idx
-  on public.products(sort_order);
-
-create index if not exists categories_sort_order_idx
-  on public.categories(sort_order);
+create index if not exists products_category_id_idx on public.products(category_id);
+create index if not exists products_sort_order_idx on public.products(sort_order);
+create index if not exists categories_sort_order_idx on public.categories(sort_order);
 
 alter table public.categories enable row level security;
 alter table public.products enable row level security;
 alter table public.bonuses enable row level security;
 
+drop policy if exists "public read categories" on public.categories;
+drop policy if exists "public read products" on public.products;
+drop policy if exists "public read bonuses" on public.bonuses;
+drop policy if exists "public write categories" on public.categories;
+drop policy if exists "public write products" on public.products;
+drop policy if exists "public write bonuses" on public.bonuses;
+
 create policy "public read categories"
-on public.categories
-for select
-to anon, authenticated
-using (active = true);
+on public.categories for select to anon, authenticated using (true);
 
 create policy "public read products"
-on public.products
-for select
-to anon, authenticated
-using (active = true);
+on public.products for select to anon, authenticated using (true);
 
 create policy "public read bonuses"
-on public.bonuses
-for select
-to anon, authenticated
-using (active = true);
+on public.bonuses for select to anon, authenticated using (true);
 
 create policy "public write categories"
-on public.categories
-for all
-to anon, authenticated
-using (true)
-with check (true);
+on public.categories for all to anon, authenticated using (true) with check (true);
 
 create policy "public write products"
-on public.products
-for all
-to anon, authenticated
-using (true)
-with check (true);
+on public.products for all to anon, authenticated using (true) with check (true);
 
 create policy "public write bonuses"
-on public.bonuses
-for all
-to anon, authenticated
-using (true)
-with check (true);
+on public.bonuses for all to anon, authenticated using (true) with check (true);
 
 alter publication supabase_realtime add table public.categories;
 alter publication supabase_realtime add table public.products;

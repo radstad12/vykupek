@@ -2191,10 +2191,10 @@
             class="status"
             style="margin-top:10px;"
           >
-            Data katalogu, kategorií a bonusů
-            se ukládají do Supabase a
-            automaticky se synchronizují
-            mezi zařízeními.
+            Tato GitHub Pages verze ukládá
+            data do tohoto prohlížeče.
+            Pro sdílení mezi zařízeními
+            je potřeba backend.
           </div>
 
         </div>
@@ -2223,897 +2223,2691 @@
 </div>
 
 
+<script>
 
-<script type="module">
+  /*
+   * ========================================
+   * ADMIN PŘIHLÁŠENÍ
+   * ========================================
+   *
+   * Toto je zatím pouze frontendová verze.
+   * Pro skutečné zabezpečení později
+   * napojíme Supabase.
+   */
 
-  import { supabase } from './src/supabase.js';
+  const ADMIN_USER =
+    "chicano";
+
+  const ADMIN_PASS =
+    "Fuckingmcmechiko";
+
+
+  const PRODUCTS_KEY =
+    "pointo_products_v2";
+
+  const BONUS_KEY =
+    "pointo_bonus_v2";
+
+  const SESSION_KEY =
+    "pointo_admin_session_v3";
+
+  const CATEGORIES_KEY =
+    "pointo_categories_v1";
+
+  /* Jednorázové vyčištění původního katalogu. */
+  const CATALOG_RESET_KEY =
+    "pointo_catalog_reset_v1";
+
+  if(!localStorage.getItem(CATALOG_RESET_KEY)){
+    localStorage.removeItem(PRODUCTS_KEY);
+    localStorage.removeItem(CATEGORIES_KEY);
+    localStorage.setItem(CATALOG_RESET_KEY, "1");
+  }
+
 
   /* ========================================
-     ADMIN PŘIHLÁŠENÍ
+     VÝCHOZÍ KATEGORIE
      ======================================== */
 
-  const ADMIN_USER = "chicano";
-  const ADMIN_PASS = "Fuckingmcmechiko";
-  const SESSION_KEY = "pointo_admin_session_v4";
+  const defaultCategories = [];
 
-  let categories = [];
-  let products = [];
-  let bonuses = [];
-  let editingProductId = null;
-  let realtimeChannel = null;
-  let refreshTimer = null;
 
   /* ========================================
-     POMOCNÉ FUNKCE
+     VÝCHOZÍ PRODUKTY
      ======================================== */
 
-  function showError(error, fallback = "Operace se nepodařila.") {
-    console.error(error);
-    const message = error?.message || fallback;
-    alert(message);
-  }
+  const defaultProducts = [];
 
-  function sortCategories() {
-    categories.sort((a, b) => {
-      const order = Number(a.sort_order ?? 0) - Number(b.sort_order ?? 0);
-      return order || String(a.name || '').localeCompare(String(b.name || ''), 'cs');
-    });
-  }
 
-  function sortProducts() {
-    products.sort((a, b) => {
-      const order = Number(a.sort_order ?? 0) - Number(b.sort_order ?? 0);
-      return order || String(a.name || '').localeCompare(String(b.name || ''), 'cs');
-    });
-  }
+  /* ========================================
+     VÝCHOZÍ BONUSY
+     ======================================== */
 
-  function escapeHtml(value) {
-    return String(value ?? '')
-      .replaceAll('&', '&amp;')
-      .replaceAll('<', '&lt;')
-      .replaceAll('>', '&gt;')
-      .replaceAll('"', '&quot;')
-      .replaceAll("'", '&#039;');
-  }
+  const defaultBonus = [
 
-  function slugify(value) {
-    return String(value)
-      .normalize('NFD')
-      .replace(/[\u0300-\u036f]/g, '')
-      .toLowerCase()
-      .replace(/[^a-z0-9]+/g, '-')
-      .replace(/^-+|-+$/g, '');
-  }
+    {
+      min:2500,
+      percent:10
+    },
 
-  function isAdmin() {
-    return localStorage.getItem(SESSION_KEY) === '1';
-  }
-
-  function getCategory(id) {
-    return categories.find(category => category.id === id);
-  }
-
-  function getCategoryName(id) {
-    return getCategory(id)?.name || 'Bez kategorie';
-  }
-
-  function getCategoryIcon(id) {
-    return getCategory(id)?.icon || '📦';
-  }
-
-  function nextSortOrder(items) {
-    return items.reduce((max, item) => Math.max(max, Number(item.sort_order ?? 0)), -1) + 1;
-  }
-
-  async function loadCategories() {
-    const { data, error } = await supabase
-      .from('categories')
-      .select('*')
-      .order('sort_order', { ascending: true });
-
-    if (error) throw error;
-    categories = (data || []).map(row => ({
-      ...row,
-      id: String(row.id),
-      sort_order: Number(row.sort_order ?? 0),
-      active: Boolean(row.active),
-    }));
-    sortCategories();
-  }
-
-  async function loadProducts() {
-    const { data, error } = await supabase
-      .from('products')
-      .select('*')
-      .order('sort_order', { ascending: true })
-      .order('created_at', { ascending: false });
-
-    if (error) throw error;
-    products = (data || []).map(row => ({
-      ...row,
-      id: String(row.id),
-      category: row.category_id || '',
-      category_id: row.category_id || null,
-      price: Number(row.price ?? 0),
-      sale_price: Number(row.sale_price ?? 0),
-      active: Boolean(row.active),
-      admin_item: Boolean(row.admin_item),
-      sort_order: Number(row.sort_order ?? 0),
-      image: row.image || '',
-    }));
-    sortProducts();
-  }
-
-  async function loadBonuses() {
-    const { data, error } = await supabase
-      .from('bonuses')
-      .select('*')
-      .order('threshold', { ascending: false });
-
-    if (error) throw error;
-    bonuses = (data || []).map(row => ({
-      id: String(row.id),
-      min: Number(row.threshold ?? 0),
-      percent: row.bonus_type === 'percent' ? Number(row.bonus_value ?? 0) : 0,
-      bonus_type: row.bonus_type || 'percent',
-      bonus_value: Number(row.bonus_value ?? 0),
-      active: Boolean(row.active),
-    }));
-  }
-
-  async function loadCatalog({ render = true } = {}) {
-    try {
-      const result = await Promise.all([
-        loadCategories(),
-        loadProducts(),
-        loadBonuses(),
-      ]);
-      void result;
-
-      if (render) {
-        renderCategorySelect();
-        renderCategoryList();
-        renderProducts();
-        calculateTotal();
-        if (isAdmin()) {
-          renderAdminProducts();
-          renderBonusRows();
-        }
-      }
-    } catch (error) {
-      showError(error, 'Nepodařilo se načíst katalog ze Supabase.');
+    {
+      min:1000,
+      percent:5
     }
+
+  ];
+
+
+  /* ========================================
+     NAČTENÍ DAT
+     ======================================== */
+
+  function loadJson(
+    key,
+    fallback
+  ){
+
+    try{
+
+      const value =
+        localStorage.getItem(
+          key
+        );
+
+      return value
+        ? JSON.parse(value)
+        : fallback;
+
+    }catch(e){
+
+      return fallback;
+
+    }
+
   }
 
-  function queueRealtimeRefresh() {
-    window.clearTimeout(refreshTimer);
-    refreshTimer = window.setTimeout(() => {
-      loadCatalog({ render: true });
-    }, 120);
+
+  function saveJson(
+    key,
+    value
+  ){
+
+    localStorage.setItem(
+      key,
+      JSON.stringify(value)
+    );
+
   }
 
-  function setupRealtime() {
-    realtimeChannel = supabase
-      .channel('pointo-catalog-sync')
-      .on('postgres_changes', { event: '*', schema: 'public', table: 'categories' }, queueRealtimeRefresh)
-      .on('postgres_changes', { event: '*', schema: 'public', table: 'products' }, queueRealtimeRefresh)
-      .on('postgres_changes', { event: '*', schema: 'public', table: 'bonuses' }, queueRealtimeRefresh)
-      .subscribe(status => {
-        if (status === 'CHANNEL_ERROR') {
-          console.warn('Supabase Realtime se nepodařilo připojit.');
-        }
-      });
+
+  let categories =
+    loadJson(
+      CATEGORIES_KEY,
+      null
+    );
+
+
+  if(!categories){
+
+    categories =
+      defaultCategories;
+
+    saveJson(
+      CATEGORIES_KEY,
+      categories
+    );
+
   }
+
+
+  function normalizeProductCategory(product){
+
+    if(product.category){
+
+      const exists =
+        categories.some(
+          c => c.id === product.category
+        );
+
+      if(exists){
+
+        return product;
+
+      }
+
+    }
+
+
+    const legacyMap = {
+
+      "Baterky na zbraň":"zbrane",
+      "Sada na čištění zbraní":"zbrane",
+
+      "Zlaté mince":"cennosti",
+      "Zlaté prsteny":"cennosti",
+      "Náhrdelníky":"cennosti",
+      "Hodinky":"cennosti",
+      "Klenoty":"cennosti",
+
+      "Zvláštní karty":"karty",
+
+      "Semínka":"zahradnictvi",
+
+      "Autodíly":"naradi",
+      "Golfová hůl":"naradi",
+      "Kulečníkové tágo":"naradi"
+
+    };
+
+
+    return {
+      ...product,
+      category:
+        legacyMap[product.name]
+        || categories[0]?.id
+        || ""
+    };
+
+  }
+
+
+  let products =
+    loadJson(
+      PRODUCTS_KEY,
+      null
+    );
+
+
+  if(!products){
+
+    products =
+      defaultProducts;
+
+    saveJson(
+      PRODUCTS_KEY,
+      products
+    );
+
+  }
+
+
+  products =
+    products
+      .map(
+        normalizeProductCategory
+      )
+      .map(
+        product => ({
+          ...product,
+          sale_price:Number(product.sale_price ?? 0),
+          admin_item:Boolean(product.admin_item)
+        })
+      );
+
+
+  saveJson(
+    PRODUCTS_KEY,
+    products
+  );
+
+
+  let bonuses =
+    loadJson(
+      BONUS_KEY,
+      null
+    );
+
+
+  if(!bonuses){
+
+    bonuses =
+      defaultBonus;
+
+    saveJson(
+      BONUS_KEY,
+      bonuses
+    );
+
+  }
+
+
+  let editingProductId =
+    null;
+
 
   /* ========================================
      LOGIN
      ======================================== */
 
-  function openLogin() {
-    document.getElementById('loginModal').classList.add('open');
-    document.getElementById('loginUser').focus();
+  function openLogin(){
+
+    document
+      .getElementById(
+        "loginModal"
+      )
+      .classList.add(
+        "open"
+      );
+
+    document
+      .getElementById(
+        "loginUser"
+      )
+      .focus();
+
   }
 
-  function closeLogin() {
-    document.getElementById('loginModal').classList.remove('open');
-    document.getElementById('loginError').classList.add('hidden');
+
+  function closeLogin(){
+
+    document
+      .getElementById(
+        "loginModal"
+      )
+      .classList.remove(
+        "open"
+      );
+
+    document
+      .getElementById(
+        "loginError"
+      )
+      .classList.add(
+        "hidden"
+      );
+
   }
 
-  function login() {
-    const user = document.getElementById('loginUser').value.trim();
-    const pass = document.getElementById('loginPass').value;
 
-    if (user === ADMIN_USER && pass === ADMIN_PASS) {
-      localStorage.setItem(SESSION_KEY, '1');
-      document.body.classList.add('admin-mode');
+  function login(){
+
+    const user =
+      document
+        .getElementById(
+          "loginUser"
+        )
+        .value
+        .trim();
+
+
+    const pass =
+      document
+        .getElementById(
+          "loginPass"
+        )
+        .value;
+
+
+    if(
+      user === ADMIN_USER &&
+      pass === ADMIN_PASS
+    ){
+
+      localStorage.setItem(
+        SESSION_KEY,
+        "1"
+      );
+
+      document.body.classList.add("admin-mode");
       updateAdminTopbar();
       renderProducts();
       calculateTotal();
+
       closeLogin();
       openAdmin();
-      return;
+
+    }else{
+
+      document
+        .getElementById(
+          "loginError"
+        )
+        .classList
+        .remove(
+          "hidden"
+        );
+
     }
 
-    document.getElementById('loginError').classList.remove('hidden');
   }
 
-  function openAdmin() {
+
+  function openAdmin(){
+
     renderCategorySelect();
+
     renderCategoryList();
+
     renderAdminProducts();
+
     renderBonusRows();
-    document.getElementById('adminModal').classList.add('open');
+
+    document
+      .getElementById(
+        "adminModal"
+      )
+      .classList
+      .add(
+        "open"
+      );
+
   }
 
-  function closeAdmin() {
-    document.getElementById('adminModal').classList.remove('open');
+
+  function closeAdmin(){
+
+    document
+      .getElementById(
+        "adminModal"
+      )
+      .classList
+      .remove(
+        "open"
+      );
+
   }
 
-  function logout() {
-    localStorage.removeItem(SESSION_KEY);
-    document.body.classList.remove('admin-mode');
+
+  function logout(){
+
+    localStorage.removeItem(
+      SESSION_KEY
+    );
+
+    document.body.classList.remove(
+      "admin-mode"
+    );
+
     updateAdminTopbar();
+
     closeAdmin();
+
     renderProducts();
+
     resetCalculator();
+
   }
 
-  function updateAdminTopbar() {
-    const button = document.getElementById('adminLogoutTop');
-    if (button) button.style.display = isAdmin() ? 'block' : 'none';
+
+  function isAdmin(){
+
+    return(
+      localStorage.getItem(
+        SESSION_KEY
+      ) === "1"
+    );
+
   }
+
+
+  function updateAdminTopbar(){
+
+    const button =
+      document.getElementById(
+        "adminLogoutTop"
+      );
+
+    if(button){
+
+      button.style.display =
+        isAdmin()
+          ? "block"
+          : "none";
+
+    }
+
+  }
+
 
   /* ========================================
-     PRODUKT FORMULÁŘ
+     FORM PRODUKTU
      ======================================== */
 
-  function resetProductForm() {
-    editingProductId = null;
-    document.getElementById('pName').value = '';
-    document.getElementById('pPrice').value = '';
-    document.getElementById('pSalePrice').value = '';
-    document.getElementById('pImage').value = '';
+  function resetProductForm(){
+
+    editingProductId =
+      null;
+
+
+    document
+      .getElementById(
+        "pName"
+      )
+      .value = "";
+
+
+    document
+      .getElementById(
+        "pPrice"
+      )
+      .value = "";
+
+
+    document
+      .getElementById(
+        "pSalePrice"
+      )
+      .value = "";
+
+
+    document
+      .getElementById(
+        "pImage"
+      )
+      .value = "";
+
+
     renderCategorySelect();
-    document.getElementById('pCategory').value = categories[0]?.id || '';
-    document.getElementById('pActive').checked = true;
-    document.getElementById('pAdminItem').checked = false;
-    document.getElementById('productEditStatus').textContent = 'Přidáváte nový produkt.';
-  }
 
-  function readFileAsDataUrl(file) {
-    return new Promise((resolve, reject) => {
-      if (!file) {
-        resolve('');
-        return;
-      }
-      const reader = new FileReader();
-      reader.onload = () => resolve(reader.result);
-      reader.onerror = reject;
-      reader.readAsDataURL(file);
-    });
-  }
 
-  async function saveProduct() {
-    const name = document.getElementById('pName').value.trim();
-    const price = Number(document.getElementById('pPrice').value);
-    const salePrice = Number(document.getElementById('pSalePrice').value || 0);
-    const active = document.getElementById('pActive').checked;
-    const adminItem = document.getElementById('pAdminItem').checked;
-    const category = document.getElementById('pCategory').value || null;
-    const file = document.getElementById('pImage').files[0];
+    if(categories.length){
 
-    if (!name || !Number.isFinite(price) || price < 0 || !Number.isFinite(salePrice) || salePrice < 0) {
-      alert('Vyplň název a platné ceny.');
-      return;
+      document
+        .getElementById(
+          "pCategory"
+        )
+        .value =
+          categories[0].id;
+
     }
 
-    try {
-      const newImage = file ? await readFileAsDataUrl(file) : '';
-      const existing = editingProductId
-        ? products.find(p => p.id === editingProductId)
-        : null;
 
-      const payload = {
-        name,
-        category_id: category,
-        price,
-        sale_price: salePrice,
-        image: newImage || existing?.image || null,
-        active,
-        admin_item: adminItem,
-        sort_order: existing?.sort_order ?? nextSortOrder(products),
-      };
+    document
+      .getElementById(
+        "pActive"
+      )
+      .checked = true;
 
-      if (editingProductId) {
-        const { error } = await supabase
-          .from('products')
-          .update(payload)
-          .eq('id', editingProductId);
-        if (error) throw error;
-      } else {
-        const { error } = await supabase
-          .from('products')
-          .insert(payload);
-        if (error) throw error;
+
+    document
+      .getElementById(
+        "pAdminItem"
+      )
+      .checked = false;
+
+
+    document
+      .getElementById(
+        "productEditStatus"
+      )
+      .textContent =
+        "Přidáváte nový produkt.";
+
+  }
+
+
+  /* ========================================
+     OBRÁZEK → DATA URL
+     ======================================== */
+
+  function readFileAsDataUrl(
+    file
+  ){
+
+    return new Promise(
+      (resolve,reject)=>{
+
+        if(!file){
+
+          resolve("");
+
+          return;
+
+        }
+
+
+        const reader =
+          new FileReader();
+
+
+        reader.onload =
+          () =>
+            resolve(
+              reader.result
+            );
+
+
+        reader.onerror =
+          reject;
+
+
+        reader.readAsDataURL(
+          file
+        );
+
       }
+    );
+
+  }
+
+
+  /* ========================================
+     ULOŽENÍ PRODUKTU
+     ======================================== */
+
+  async function saveProduct(){
+
+    const name =
+      document
+        .getElementById(
+          "pName"
+        )
+        .value
+        .trim();
+
+
+    const price =
+      Number(
+        document
+          .getElementById(
+            "pPrice"
+          )
+          .value
+      );
+
+
+    const active =
+      document
+        .getElementById(
+          "pActive"
+        )
+        .checked;
+
+
+    const salePrice =
+      Number(
+        document
+          .getElementById(
+            "pSalePrice"
+          )
+          .value
+      );
+
+
+    const adminItem =
+      document
+        .getElementById(
+          "pAdminItem"
+        )
+        .checked;
+
+
+    const category =
+      document
+        .getElementById(
+          "pCategory"
+        )
+        .value;
+
+
+    const file =
+      document
+        .getElementById(
+          "pImage"
+        )
+        .files[0];
+
+
+    if(
+      !name ||
+      !Number.isFinite(price) ||
+      price < 0 ||
+      !Number.isFinite(salePrice) ||
+      salePrice < 0
+    ){
+
+      alert(
+        "Vyplň název a platnou výkupní cenu."
+      );
+
+      return;
+
+    }
+
+
+    let image = "";
+
+
+    if(file){
+
+      image =
+        await readFileAsDataUrl(
+          file
+        );
+
+    }
+
+
+    /* EDITACE */
+
+    if(editingProductId){
+
+      const item =
+        products.find(
+          p =>
+            p.id ===
+            editingProductId
+        );
+
+
+      if(item){
+
+        item.name =
+          name;
+
+        item.price =
+          price;
+
+        item.sale_price =
+          salePrice;
+
+        item.category =
+          category;
+
+        item.active =
+          active;
+
+        item.admin_item =
+          adminItem;
+
+
+        if(image){
+
+          item.image =
+            image;
+
+        }
+
+      }
+
+    }
+
+    /* NOVÝ PRODUKT */
+
+    else{
+
+      products.unshift({
+
+        id:
+          crypto.randomUUID(),
+
+        name:
+          name,
+
+        price:
+          price,
+
+        sale_price:
+          salePrice,
+
+        image:
+          image,
+
+        category:
+          category,
+
+        active:
+          active,
+
+        admin_item:
+          adminItem
+
+      });
+
+    }
+
+
+    saveJson(
+      PRODUCTS_KEY,
+      products
+    );
+
+
+    resetProductForm();
+
+    renderProducts();
+
+    renderAdminProducts();
+
+    renderCategoryList();
+
+  }
+
+
+  /* ========================================
+     EDITACE
+     ======================================== */
+
+  function editProduct(
+    id
+  ){
+
+    const item =
+      products.find(
+        p =>
+          p.id === id
+      );
+
+
+    if(!item){
+
+      return;
+
+    }
+
+
+    editingProductId =
+      id;
+
+
+    document
+      .getElementById(
+        "pName"
+      )
+      .value =
+        item.name;
+
+
+    document
+      .getElementById(
+        "pPrice"
+      )
+      .value =
+        item.price;
+
+
+    document
+      .getElementById(
+        "pSalePrice"
+      )
+      .value =
+        item.sale_price ?? 0;
+
+
+    renderCategorySelect();
+
+
+    document
+      .getElementById(
+        "pCategory"
+      )
+      .value =
+        item.category
+        || categories[0]?.id
+        || "";
+
+
+    document
+      .getElementById(
+        "pImage"
+      )
+      .value =
+        "";
+
+
+    document
+      .getElementById(
+        "pActive"
+      )
+      .checked =
+        item.active;
+
+
+    document
+      .getElementById(
+        "pAdminItem"
+      )
+      .checked =
+        Boolean(
+          item.admin_item
+        );
+
+
+    document
+      .getElementById(
+        "productEditStatus"
+      )
+      .textContent =
+        "Upravujete: " +
+        item.name;
+
+  }
+
+
+  /* ========================================
+     SMAZÁNÍ
+     ======================================== */
+
+  function deleteProduct(
+    id
+  ){
+
+    const item =
+      products.find(
+        p =>
+          p.id === id
+      );
+
+
+    if(!item){
+
+      return;
+
+    }
+
+
+    if(
+      confirm(
+        `Opravdu smazat produkt „${item.name}“?`
+      )
+    ){
+
+      products =
+        products.filter(
+          p =>
+            p.id !== id
+        );
+
+
+      saveJson(
+        PRODUCTS_KEY,
+        products
+      );
+
+
+      renderProducts();
+
+      renderAdminProducts();
+
+      renderCategoryList();
 
       resetProductForm();
-      await loadCatalog();
-      alert('Produkt byl uložen do Supabase a synchronizován.');
-    } catch (error) {
-      showError(error, 'Produkt se nepodařilo uložit.');
+
     }
+
   }
 
-  function editProduct(id) {
-    const item = products.find(p => p.id === id);
-    if (!item) return;
 
-    editingProductId = id;
-    document.getElementById('pName').value = item.name || '';
-    document.getElementById('pPrice').value = item.price ?? 0;
-    document.getElementById('pSalePrice').value = item.sale_price ?? 0;
-    document.getElementById('pImage').value = '';
-    renderCategorySelect();
-    document.getElementById('pCategory').value = item.category || '';
-    document.getElementById('pActive').checked = Boolean(item.active);
-    document.getElementById('pAdminItem').checked = Boolean(item.admin_item);
-    document.getElementById('productEditStatus').textContent = `Upravujete: ${item.name}`;
-  }
+  /* ========================================
+     ADMIN SEZNAM PRODUKTŮ
+     ======================================== */
 
-  async function deleteProduct(id) {
-    const item = products.find(p => p.id === id);
-    if (!item) return;
+  function renderAdminProducts(){
 
-    if (!confirm(`Opravdu smazat produkt „${item.name}“?`)) return;
+    const box =
+      document.getElementById(
+        "adminProducts"
+      );
 
-    try {
-      const { error } = await supabase.from('products').delete().eq('id', id);
-      if (error) throw error;
-      resetProductForm();
-      await loadCatalog();
-    } catch (error) {
-      showError(error, 'Produkt se nepodařilo smazat.');
-    }
-  }
 
-  function renderAdminProducts() {
-    const box = document.getElementById('adminProducts');
-    if (!box) return;
+    if(
+      products.length === 0
+    ){
 
-    if (products.length === 0) {
-      box.innerHTML = '<div class="status">Zatím žádné produkty.</div>';
+      box.innerHTML =
+        '<div class="status">Zatím žádné produkty.</div>';
+
       return;
+
     }
 
-    box.innerHTML = products.map(p => `
-      <div class="product-row">
-        <div class="thumb">
-          ${p.image ? `<img src="${escapeHtml(p.image)}" alt="">` : 'FOTO'}
-        </div>
-        <div>
-          <div class="row-title">
-            ${escapeHtml(p.name)}
-            ${p.admin_item ? '<span class="admin-item-badge">🔒 ADMIN ITEM</span>' : ''}
-          </div>
-          <div class="row-meta">
-            Kategorie: ${escapeHtml(getCategoryName(p.category))}
-            · Výkup: $${Number(p.price).toLocaleString('cs-CZ')}
-            · Prodej: $${Number(p.sale_price ?? 0).toLocaleString('cs-CZ')}
-            · ${p.active ? 'aktivní' : 'skrytý'}
-          </div>
-        </div>
-        <div class="row-actions">
-          <button class="secondary" onclick="editProduct('${p.id}')">Upravit</button>
-          <button class="danger" onclick="deleteProduct('${p.id}')">Smazat</button>
-        </div>
-      </div>
-    `).join('');
+
+    box.innerHTML =
+      products
+        .map(
+          p => `
+
+            <div class="product-row">
+
+              <div class="thumb">
+
+                ${
+                  p.image
+
+                  ?
+
+                  `<img
+                    src="${p.image}"
+                    alt=""
+                  >`
+
+                  :
+
+                  "FOTO"
+                }
+
+              </div>
+
+
+              <div>
+
+                <div class="row-title">
+                  ${escapeHtml(p.name)}
+                  ${
+                    p.admin_item
+                    ? '<span class="admin-item-badge">🔒 ADMIN ITEM</span>'
+                    : ''
+                  }
+                </div>
+
+                <div class="row-meta">
+
+                  Kategorie:
+                  ${escapeHtml(getCategoryName(p.category))}
+
+                  ·
+
+                  Výkup:
+                  $${Number(p.price).toLocaleString("cs-CZ")}
+
+                  ·
+
+                  Prodej:
+                  $${Number(p.sale_price ?? 0).toLocaleString("cs-CZ")}
+
+                  ·
+
+                  ${
+                    p.active
+                    ? "aktivní"
+                    : "skrytý"
+                  }
+
+                </div>
+
+              </div>
+
+
+              <div class="row-actions">
+
+                <button
+                  class="secondary"
+                  onclick="editProduct('${p.id}')"
+                >
+                  Upravit
+                </button>
+
+                <button
+                  class="danger"
+                  onclick="deleteProduct('${p.id}')"
+                >
+                  Smazat
+                </button>
+
+              </div>
+
+            </div>
+
+          `
+        )
+        .join("");
+
   }
+
 
   /* ========================================
      VEŘEJNÉ PRODUKTY
      ======================================== */
 
-  function renderProducts() {
-    const box = document.getElementById('products');
-    const active = products.filter(p => p.active && (isAdmin() || !p.admin_item));
+  function renderProducts(){
 
-    if (active.length === 0) {
-      box.innerHTML = '<div class="status">Momentálně nejsou aktivní žádné produkty.</div>';
-      document.getElementById('total').textContent = '$0';
-      document.getElementById('bonus').textContent = 'Vyberte množství produktů';
+    const box =
+      document.getElementById(
+        "products"
+      );
+
+
+    const active =
+      products.filter(
+        p =>
+          p.active &&
+          (
+            isAdmin() ||
+            !p.admin_item
+          )
+      );
+
+
+    if(
+      active.length === 0
+    ){
+
+      box.innerHTML =
+        '<div class="status">Momentálně nejsou aktivní žádné produkty.</div>';
+
+
+      document
+        .getElementById(
+          "total"
+        )
+        .textContent =
+          "$0";
+
+
+      document
+        .getElementById(
+          "bonus"
+        )
+        .textContent =
+          "Vyberte množství produktů";
+
+
       return;
+
     }
 
-    const categoryMap = new Map(categories.map(category => [category.id, category]));
-    const grouped = categories
-      .map(category => ({
-        ...category,
-        items: active.filter(product => product.category === category.id),
-      }))
-      .filter(group => group.items.length > 0);
 
-    const uncategorized = active.filter(product => !categoryMap.has(product.category));
-    box.innerHTML = '';
+    const categoryMap =
+      new Map(
+        categories.map(
+          category =>
+            [category.id, category]
+        )
+      );
 
-    grouped.forEach(group => {
-      const section = document.createElement('section');
-      section.className = 'category-section';
 
-      const heading = document.createElement('div');
-      heading.className = 'category-heading';
+    const grouped =
+      categories
+        .map(
+          category => ({
 
-      const icon = document.createElement('div');
-      icon.className = 'category-icon';
-      icon.textContent = group.icon || '📦';
+            ...category,
 
-      const title = document.createElement('h3');
-      title.textContent = group.name;
+            items:
+              active.filter(
+                product =>
+                  product.category ===
+                  category.id
+              )
 
-      const count = document.createElement('span');
-      count.textContent = `${group.items.length} ${group.items.length === 1 ? 'produkt' : 'produktů'}`;
+          })
+        )
+        .filter(
+          group =>
+            group.items.length > 0
+        );
 
-      heading.append(icon, title, count);
 
-      const productGrid = document.createElement('div');
-      productGrid.className = 'category-products';
+    const uncategorized =
+      active.filter(
+        product =>
+          !categoryMap.has(
+            product.category
+          )
+      );
 
-      group.items.slice().sort((a, b) => Number(a.sort_order || 0) - Number(b.sort_order || 0)).forEach(p => {
-        productGrid.insertAdjacentHTML('beforeend', productCardHtml(p));
+
+    box.innerHTML = "";
+
+
+    grouped.forEach(
+      group => {
+
+        const section =
+          document.createElement(
+            "section"
+          );
+
+        section.className =
+          "category-section";
+
+
+        const heading =
+          document.createElement(
+            "div"
+          );
+
+        heading.className =
+          "category-heading";
+
+
+        const icon =
+          document.createElement(
+            "div"
+          );
+
+        icon.className =
+          "category-icon";
+
+        icon.textContent =
+          group.icon ||
+          "📦";
+
+
+        const title =
+          document.createElement(
+            "h3"
+          );
+
+        title.textContent =
+          group.name;
+
+
+        const count =
+          document.createElement(
+            "span"
+          );
+
+        count.textContent =
+          `${group.items.length} ${
+            group.items.length === 1
+              ? "produkt"
+              : "produktů"
+          }`;
+
+
+        heading.appendChild(
+          icon
+        );
+
+        heading.appendChild(
+          title
+        );
+
+        heading.appendChild(
+          count
+        );
+
+
+        const productGrid =
+          document.createElement(
+            "div"
+          );
+
+        productGrid.className =
+          "category-products";
+
+
+        group.items
+          .slice()
+          .sort(
+            (a, b) =>
+              Number(a.price || 0) -
+              Number(b.price || 0)
+          )
+          .forEach(
+            p => {
+
+              productGrid.insertAdjacentHTML(
+                "beforeend",
+                productCardHtml(p)
+              );
+
+            }
+          );
+
+
+        section.appendChild(
+          heading
+        );
+
+        section.appendChild(
+          productGrid
+        );
+
+
+        box.appendChild(
+          section
+        );
+
+      }
+    );
+
+
+    if(
+      uncategorized.length
+    ){
+
+      const section =
+        document.createElement(
+          "section"
+        );
+
+        section.className =
+          "category-section";
+
+
+      const heading =
+        document.createElement(
+          "div"
+        );
+
+        heading.className =
+          "category-heading";
+
+
+      heading.innerHTML =
+        `
+          <div class="category-icon">
+            📦
+          </div>
+
+          <h3>
+            Bez kategorie
+          </h3>
+
+          <span>
+            ${uncategorized.length} produktů
+          </span>
+        `;
+
+
+      const productGrid =
+        document.createElement(
+          "div"
+        );
+
+      productGrid.className =
+        "category-products";
+
+
+      uncategorized
+        .slice()
+        .sort(
+          (a, b) =>
+            Number(a.price || 0) -
+            Number(b.price || 0)
+        )
+        .forEach(
+          p => {
+
+            productGrid.insertAdjacentHTML(
+              "beforeend",
+              productCardHtml(p)
+            );
+
+          }
+        );
+
+
+      section.appendChild(
+        heading
+      );
+
+      section.appendChild(
+        productGrid
+      );
+
+
+      box.appendChild(
+        section
+      );
+
+    }
+
+
+    calculateTotal();
+
+  }
+
+
+  function productCardHtml(p){
+
+    return `
+
+      <div class="product">
+
+        <div class="product-photo">
+
+          ${
+            p.image
+            ?
+              `
+                <img
+                  src="${p.image}"
+                  alt="${escapeHtml(p.name)}"
+                >
+              `
+            :
+              `
+                <div class="photo-fallback">
+                  FOTOGRAFIE PRODUKTU
+                </div>
+              `
+          }
+
+        </div>
+
+
+        <div class="product-name">
+
+          ${escapeHtml(p.name)}
+
+        </div>
+
+
+        <div class="quantity">
+
+          <button
+            type="button"
+            onclick="changeQty('${p.id}',-1)"
+          >
+            −
+          </button>
+
+
+          <input
+            id="q_${p.id}"
+            type="number"
+            min="0"
+            value="0"
+            oninput="calculateTotal()"
+          >
+
+
+          <button
+            type="button"
+            onclick="changeQty('${p.id}',1)"
+          >
+            +
+          </button>
+
+        </div>
+
+      </div>
+
+    `;
+
+  }
+
+
+  /* ========================================
+     + / -
+     ======================================== */
+
+  function changeQty(
+    id,
+    amount
+  ){
+
+    const input =
+      document.getElementById(
+        "q_" + id
+      );
+
+
+    if(!input){
+
+      return;
+
+    }
+
+
+    let value =
+      parseInt(
+        input.value
+      ) || 0;
+
+
+    value +=
+      amount;
+
+
+    if(value < 0){
+
+      value = 0;
+
+    }
+
+
+    input.value =
+      value;
+
+
+    calculateTotal();
+
+  }
+
+
+  /* ========================================
+     VYNULOVAT VÝKUP
+     ======================================== */
+
+  function resetCalculator(){
+
+    products
+      .filter(p => p.active)
+      .forEach(p => {
+
+        const input =
+          document.getElementById(
+            "q_" + p.id
+          );
+
+        if(input){
+          input.value = 0;
+        }
+
       });
 
-      section.append(heading, productGrid);
-      box.appendChild(section);
-    });
+    document
+      .getElementById("total")
+      .textContent = "$0";
 
-    if (uncategorized.length) {
-      const section = document.createElement('section');
-      section.className = 'category-section';
-      const heading = document.createElement('div');
-      heading.className = 'category-heading';
-      heading.innerHTML = `
-        <div class="category-icon">📦</div>
-        <h3>Bez kategorie</h3>
-        <span>${uncategorized.length} produktů</span>
-      `;
-      const productGrid = document.createElement('div');
-      productGrid.className = 'category-products';
-      uncategorized.forEach(p => productGrid.insertAdjacentHTML('beforeend', productCardHtml(p)));
-      section.append(heading, productGrid);
-      box.appendChild(section);
-    }
+    document
+      .getElementById("bonus")
+      .textContent =
+        "Vyberte množství produktů";
 
     calculateTotal();
+
   }
 
-  function productCardHtml(p) {
-    return `
-      <div class="product">
-        <div class="product-photo">
-          ${p.image ? `<img src="${escapeHtml(p.image)}" alt="${escapeHtml(p.name)}">` : '<div class="photo-fallback">FOTOGRAFIE PRODUKTU</div>'}
-        </div>
-        <div class="product-name">${escapeHtml(p.name)}</div>
-        <div class="quantity">
-          <button type="button" onclick="changeQty('${p.id}',-1)">−</button>
-          <input id="q_${p.id}" type="number" min="0" value="0" oninput="calculateTotal()">
-          <button type="button" onclick="changeQty('${p.id}',1)">+</button>
-        </div>
-      </div>
-    `;
-  }
-
-  function changeQty(id, amount) {
-    const input = document.getElementById('q_' + id);
-    if (!input) return;
-    let value = parseInt(input.value, 10) || 0;
-    value = Math.max(0, value + amount);
-    input.value = value;
-    calculateTotal();
-  }
-
-  function resetCalculator() {
-    products.filter(p => p.active).forEach(p => {
-      const input = document.getElementById('q_' + p.id);
-      if (input) input.value = 0;
-    });
-
-    document.getElementById('total').textContent = '$0';
-    document.getElementById('bonus').textContent = 'Vyberte množství produktů';
-    calculateTotal();
-  }
 
   /* ========================================
      KATEGORIE
      ======================================== */
 
-  function renderCategorySelect() {
-    const select = document.getElementById('pCategory');
-    if (!select) return;
+  function getCategory(
+    id
+  ){
 
-    const previous = select.value;
-    select.innerHTML = `
-      <option value="">Bez kategorie</option>
-      ${categories.map(category => `
-        <option value="${escapeHtml(category.id)}">
-          ${escapeHtml(category.icon || '📦')} ${escapeHtml(category.name)}
-        </option>
-      `).join('')}
-    `;
+    return categories.find(
+      category =>
+        category.id === id
+    );
 
-    if (categories.some(category => category.id === previous)) {
-      select.value = previous;
-    }
   }
 
-  function renderCategoryList() {
-    const list = document.getElementById('categoryList');
-    if (!list) return;
 
-    if (categories.length === 0) {
-      list.innerHTML = '<div class="status">Zatím žádné kategorie.</div>';
-      return;
-    }
+  function getCategoryName(
+    id
+  ){
 
-    list.innerHTML = categories.map(category => {
-      const count = products.filter(product => product.category === category.id).length;
-      return `
-        <div class="category-item">
-          <div class="category-item-icon">${escapeHtml(category.icon || '📦')}</div>
-          <div class="category-item-name">${escapeHtml(category.name)}</div>
-          <div class="category-count">${count} produktů</div>
-        </div>
-      `;
-    }).join('');
+    return (
+      getCategory(id)?.name
+      || "Bez kategorie"
+    );
+
   }
 
-  async function addCategory() {
-    const nameInput = document.getElementById('newCategoryName');
-    const iconInput = document.getElementById('newCategoryIcon');
-    const name = nameInput.value.trim();
-    const icon = iconInput.value.trim() || '📦';
 
-    if (!name) {
-      alert('Zadej název kategorie.');
+  function renderCategorySelect(){
+
+    const select =
+      document.getElementById(
+        "pCategory"
+      );
+
+
+    if(!select){
       return;
     }
 
-    if (categories.some(category => category.name.toLowerCase() === name.toLowerCase())) {
-      alert('Tato kategorie už existuje.');
+
+    const previous =
+      select.value;
+
+
+    select.innerHTML =
+      categories
+        .map(
+          category => `
+            <option
+              value="${category.id}"
+            >
+              ${escapeHtml(category.icon || "📦")}
+              ${escapeHtml(category.name)}
+            </option>
+          `
+        )
+        .join("");
+
+
+    if(
+      categories.some(
+        category =>
+          category.id === previous
+      )
+    ){
+
+      select.value =
+        previous;
+
+    }
+
+  }
+
+
+  function renderCategoryList(){
+
+    const list =
+      document.getElementById(
+        "categoryList"
+      );
+
+
+    if(!list){
       return;
     }
 
-    const baseId = slugify(name) || `category-${Date.now()}`;
-    let id = baseId;
-    let suffix = 2;
-    while (categories.some(category => category.id === id)) {
-      id = `${baseId}-${suffix++}`;
+
+    list.innerHTML =
+      categories
+        .map(
+          category => {
+
+            const count =
+              products.filter(
+                product =>
+                  product.category ===
+                  category.id
+              ).length;
+
+
+            return `
+              <div class="category-item">
+
+                <div class="category-item-icon">
+                  ${escapeHtml(category.icon || "📦")}
+                </div>
+
+                <div class="category-item-name">
+                  ${escapeHtml(category.name)}
+                </div>
+
+                <div class="category-count">
+                  ${count} produktů
+                </div>
+
+              </div>
+            `;
+
+          }
+        )
+        .join("");
+
+  }
+
+
+  function addCategory(){
+
+    const nameInput =
+      document.getElementById(
+        "newCategoryName"
+      );
+
+
+    const iconInput =
+      document.getElementById(
+        "newCategoryIcon"
+      );
+
+
+    const name =
+      nameInput
+        .value
+        .trim();
+
+
+    const icon =
+      iconInput
+        .value
+        .trim()
+        || "📦";
+
+
+    if(!name){
+
+      alert(
+        "Zadej název kategorie."
+      );
+
+      return;
+
     }
 
-    try {
-      const { error } = await supabase.from('categories').insert({
-        id,
-        name,
-        icon,
-        sort_order: nextSortOrder(categories),
-        active: true,
-      });
-      if (error) throw error;
 
-      nameInput.value = '';
-      iconInput.value = '📦';
-      await loadCatalog();
-      alert('Kategorie byla uložena do Supabase a synchronizována.');
-    } catch (error) {
-      showError(error, 'Kategorii se nepodařilo uložit.');
+    const exists =
+      categories.some(
+        category =>
+          category.name
+            .toLowerCase()
+            ===
+          name.toLowerCase()
+      );
+
+
+    if(exists){
+
+      alert(
+        "Tato kategorie už existuje."
+      );
+
+      return;
+
     }
+
+
+    const baseId =
+      slugify(name);
+
+
+    let id =
+      baseId
+      ||
+      `category-${Date.now()}`;
+
+
+    while(
+      categories.some(
+        category =>
+          category.id === id
+      )
+    ){
+
+      id =
+        `${baseId}-${Date.now()}`;
+
+    }
+
+
+    categories.push({
+
+      id,
+      name,
+      icon
+
+    });
+
+
+    saveJson(
+      CATEGORIES_KEY,
+      categories
+    );
+
+
+    nameInput.value =
+      "";
+
+    iconInput.value =
+      "📦";
+
+
+    renderCategorySelect();
+
+    renderCategoryList();
+
+  }
+
+
+  function slugify(
+    value
+  ){
+
+    return value
+
+      .normalize("NFD")
+
+      .replace(
+        /[\u0300-\u036f]/g,
+        ""
+      )
+
+      .toLowerCase()
+
+      .replace(
+        /[^a-z0-9]+/g,
+        "-"
+      )
+
+      .replace(
+        /^-+|-+$/g,
+        ""
+      );
+
   }
 
   /* ========================================
      BONUS
      ======================================== */
 
-  function getBonus(total) {
-    return bonuses
-      .filter(b => b.active !== false && Number(total) >= Number(b.min))
-      .sort((a, b) => Number(b.min) - Number(a.min))[0] || null;
+  function getBonusRate(
+    total
+  ){
+
+    const sorted =
+      [...bonuses]
+        .sort(
+          (a,b) =>
+            Number(b.min) -
+            Number(a.min)
+        );
+
+
+    const match =
+      sorted.find(
+        x =>
+          total >=
+          Number(x.min)
+      );
+
+
+    return match
+      ? Number(match.percent) / 100
+      : 0;
+
   }
 
-  function getBonusAmount(total) {
-    const bonus = getBonus(total);
-    if (!bonus) return 0;
-    if (bonus.bonus_type === 'fixed') return Number(bonus.bonus_value || 0);
-    return total * (Number(bonus.percent || 0) / 100);
-  }
 
-  function calculateTotal() {
+  /* ========================================
+     VÝPOČET
+     ======================================== */
+
+  function calculateTotal(){
+
     let subtotal = 0;
     let saleTotal = 0;
 
+
     products
-      .filter(p => p.active && (isAdmin() || !p.admin_item))
-      .forEach(p => {
-        const input = document.getElementById('q_' + p.id);
-        if (!input) return;
-        const quantity = parseInt(input.value, 10) || 0;
-        subtotal += quantity * Number(p.price || 0);
-        if (isAdmin()) {
-          saleTotal += quantity * Number(p.sale_price || 0);
+      .filter(
+        p =>
+          p.active &&
+          (
+            isAdmin() ||
+            !p.admin_item
+          )
+      )
+      .forEach(
+        p => {
+
+          const input =
+            document.getElementById(
+              "q_" + p.id
+            );
+
+
+          if(input){
+
+            const quantity =
+              parseInt(
+                input.value
+              ) || 0;
+
+
+            subtotal +=
+              quantity *
+              Number(
+                p.price || 0
+              );
+
+
+            if(isAdmin()){
+
+              saleTotal +=
+                quantity *
+                Number(
+                  p.sale_price || 0
+                );
+
+            }
+
+          }
+
         }
-      });
+      );
 
-    const bonusAmount = getBonusAmount(subtotal);
-    const customerPayout = subtotal + bonusAmount;
-    const profit = saleTotal - customerPayout;
 
-    document.getElementById('total').textContent = '$' + customerPayout.toLocaleString('en-US', { maximumFractionDigits: 0 });
+    const rate =
+      getBonusRate(
+        subtotal
+      );
 
-    const bonusEl = document.getElementById('bonus');
-    if (subtotal === 0) {
-      bonusEl.textContent = 'Vyberte množství produktů';
-    } else if (bonusAmount > 0) {
-      const activeBonus = getBonus(subtotal);
-      const bonusText = activeBonus?.bonus_type === 'fixed'
-        ? `$${Math.round(bonusAmount).toLocaleString('en-US')}`
-        : `${Math.round(bonusAmount).toLocaleString('en-US')} (${Number(activeBonus.percent || 0)} %)`;
-      bonusEl.textContent = 'BONUS +' + bonusText;
-    } else {
-      bonusEl.textContent = 'Při vyšší hodnotě můžete získat bonus.';
+
+    const bonus =
+      subtotal * rate;
+
+
+    const customerPayout =
+      subtotal + bonus;
+
+
+    const profit =
+      saleTotal - customerPayout;
+
+
+    document
+      .getElementById(
+        "total"
+      )
+      .textContent =
+        "$" +
+        customerPayout.toLocaleString(
+          "en-US",
+          {
+            maximumFractionDigits:0
+          }
+        );
+
+
+    const bonusEl =
+      document.getElementById(
+        "bonus"
+      );
+
+
+    if(subtotal === 0){
+
+      bonusEl.textContent =
+        "Vyberte množství produktů";
+
+    }
+    else if(rate > 0){
+
+      bonusEl.textContent =
+        "BONUS +" +
+        Math.round(
+          bonus
+        ).toLocaleString(
+          "en-US"
+        ) +
+        " (" +
+        (rate * 100) +
+        " %)";
+
+    }
+    else{
+
+      bonusEl.textContent =
+        "Při vyšší hodnotě můžete získat bonus.";
+
     }
 
-    const buyEl = document.getElementById('adminBuyTotal');
-    const saleEl = document.getElementById('adminSaleTotal');
-    const profitEl = document.getElementById('adminProfit');
 
-    if (isAdmin()) {
-      if (buyEl) buyEl.textContent = '$' + customerPayout.toLocaleString('en-US', { maximumFractionDigits: 0 });
-      if (saleEl) saleEl.textContent = '$' + saleTotal.toLocaleString('en-US', { maximumFractionDigits: 0 });
-      if (profitEl) profitEl.textContent = '$' + profit.toLocaleString('en-US', { maximumFractionDigits: 0 });
-    } else {
-      if (buyEl) buyEl.textContent = '$0';
-      if (saleEl) saleEl.textContent = '$0';
-      if (profitEl) profitEl.textContent = '$0';
-    }
-  }
+    const buyEl =
+      document.getElementById(
+        "adminBuyTotal"
+      );
 
-  function renderBonusRows() {
-    const body = document.getElementById('bonusRows');
-    if (!body) return;
+    const saleEl =
+      document.getElementById(
+        "adminSaleTotal"
+      );
 
-    if (bonuses.length === 0) {
-      body.innerHTML = '<tr><td colspan="3">Zatím žádné bonusové úrovně.</td></tr>';
-      return;
-    }
+    const profitEl =
+      document.getElementById(
+        "adminProfit"
+      );
 
-    body.innerHTML = bonuses
-      .slice()
-      .sort((a, b) => Number(a.min) - Number(b.min))
-      .map((b, i) => `
-        <tr>
-          <td>
-            <input type="number" min="0" value="${Number(b.min)}" onchange="updateBonus(${i}, 'min', this.value)">
-          </td>
-          <td>
-            <input type="number" min="0" max="100" step="0.1" value="${Number(b.percent)}" onchange="updateBonus(${i}, 'percent', this.value)">
-          </td>
-          <td>
-            <button class="danger" onclick="removeBonusTier(${i})">Smazat</button>
-          </td>
-        </tr>
-      `).join('');
-  }
 
-  function updateBonus(index, key, value) {
-    if (!bonuses[index]) return;
-    bonuses[index][key] = Number(value);
-    bonuses[index].bonus_type = 'percent';
-    bonuses[index].bonus_value = Number(bonuses[index].percent || 0);
-  }
+    if(isAdmin()){
 
-  function addBonusTier() {
-    bonuses.push({
-      id: null,
-      min: 5000,
-      percent: 15,
-      bonus_type: 'percent',
-      bonus_value: 15,
-      active: true,
-    });
-    renderBonusRows();
-  }
+      if(buyEl){
 
-  function removeBonusTier(index) {
-    bonuses.splice(index, 1);
-    renderBonusRows();
-  }
+        buyEl.textContent =
+          "$" +
+          customerPayout.toLocaleString(
+            "en-US",
+            {
+              maximumFractionDigits:0
+            }
+          );
 
-  async function saveBonusTiers() {
-    const cleaned = bonuses
-      .map(x => ({
-        threshold: Number(x.min),
-        bonus_type: 'percent',
-        bonus_value: Number(x.percent) || 0,
-        active: true,
-      }))
-      .filter(x => Number.isFinite(x.threshold) && x.threshold >= 0 && Number.isFinite(x.bonus_value) && x.bonus_value >= 0)
-      .sort((a, b) => Number(b.threshold) - Number(a.threshold));
-
-    try {
-      const { error: deleteError } = await supabase
-        .from('bonuses')
-        .delete()
-        .gte('threshold', 0);
-      if (deleteError) throw deleteError;
-
-      if (cleaned.length) {
-        const { error: insertError } = await supabase
-          .from('bonuses')
-          .insert(cleaned);
-        if (insertError) throw insertError;
       }
 
-      await loadCatalog();
-      alert('Bonusové úrovně byly uloženy do Supabase.');
-    } catch (error) {
-      showError(error, 'Bonusy se nepodařilo uložit.');
+
+      if(saleEl){
+
+        saleEl.textContent =
+          "$" +
+          saleTotal.toLocaleString(
+            "en-US",
+            {
+              maximumFractionDigits:0
+            }
+          );
+
+      }
+
+
+      if(profitEl){
+
+        profitEl.textContent =
+          "$" +
+          profit.toLocaleString(
+            "en-US",
+            {
+              maximumFractionDigits:0
+            }
+          );
+
+      }
+
     }
+    else{
+
+      if(buyEl) buyEl.textContent = "$0";
+      if(saleEl) saleEl.textContent = "$0";
+      if(profitEl) profitEl.textContent = "$0";
+
+    }
+
   }
+
+
+
+
+  /* ========================================
+     ADMIN BONUSY
+     ======================================== */
+
+  function renderBonusRows(){
+
+    const body =
+      document.getElementById(
+        "bonusRows"
+      );
+
+
+    if(
+      bonuses.length === 0
+    ){
+
+      body.innerHTML =
+        "";
+
+      return;
+
+    }
+
+
+    body.innerHTML =
+
+      bonuses
+        .map(
+          (b,i) => `
+
+            <tr>
+
+              <td>
+
+                <input
+                  type="number"
+                  min="0"
+                  value="${Number(b.min)}"
+                  onchange="
+                    updateBonus(
+                      ${i},
+                      'min',
+                      this.value
+                    )
+                  "
+                >
+
+              </td>
+
+
+              <td>
+
+                <input
+                  type="number"
+                  min="0"
+                  max="100"
+                  step="0.1"
+                  value="${Number(b.percent)}"
+                  onchange="
+                    updateBonus(
+                      ${i},
+                      'percent',
+                      this.value
+                    )
+                  "
+                >
+
+              </td>
+
+
+              <td>
+
+                <button
+                  class="danger"
+                  onclick="
+                    removeBonusTier(${i})
+                  "
+                >
+                  Smazat
+                </button>
+
+              </td>
+
+            </tr>
+
+          `
+        )
+        .join("");
+
+  }
+
+
+  function updateBonus(
+    index,
+    key,
+    value
+  ){
+
+    bonuses[index][key] =
+      Number(value);
+
+  }
+
+
+  function addBonusTier(){
+
+    bonuses.push({
+
+      min:5000,
+
+      percent:15
+
+    });
+
+
+    renderBonusRows();
+
+  }
+
+
+  function removeBonusTier(
+    index
+  ){
+
+    bonuses.splice(
+      index,
+      1
+    );
+
+
+    renderBonusRows();
+
+  }
+
+
+  function saveBonusTiers(){
+
+    bonuses =
+
+      bonuses
+
+        .filter(
+          x =>
+            Number.isFinite(
+              Number(x.min)
+            )
+            &&
+            Number(x.min) >= 0
+        )
+
+        .map(
+          x => ({
+
+            min:
+              Number(x.min),
+
+            percent:
+              Number(x.percent) || 0
+
+          })
+        )
+
+        .sort(
+          (a,b) =>
+            Number(b.min) -
+            Number(a.min)
+        );
+
+
+    saveJson(
+      BONUS_KEY,
+      bonuses
+    );
+
+
+    renderBonusRows();
+
+    calculateTotal();
+
+
+    alert(
+      "Bonusové úrovně byly uloženy."
+    );
+
+  }
+
 
   /* ========================================
      EXPORT / IMPORT
      ======================================== */
 
-  function exportData() {
-    const data = { products, bonuses, categories };
-    const blob = new Blob([JSON.stringify(data, null, 2)], { type: 'application/json' });
-    const url = URL.createObjectURL(blob);
-    const a = document.createElement('a');
-    a.href = url;
-    a.download = 'pointo-data.json';
-    a.click();
-    URL.revokeObjectURL(url);
-  }
+  function exportData(){
 
-  async function importDataFromJson(file) {
-    const text = await file.text();
-    const data = JSON.parse(text);
+    const data = {
 
-    if (Array.isArray(data.categories)) {
-      const categoryRows = data.categories.map((category, index) => ({
-        id: String(category.id || slugify(category.name) || `category-${index}-${Date.now()}`),
-        name: String(category.name || 'Kategorie'),
-        icon: String(category.icon || '📦'),
-        sort_order: Number(category.sort_order ?? index),
-        active: category.active !== false,
-      }));
-      if (categoryRows.length) {
-        const { error } = await supabase.from('categories').upsert(categoryRows, { onConflict: 'id' });
-        if (error) throw error;
-      }
-    }
+      products,
 
-    if (Array.isArray(data.products)) {
-      const productRows = data.products.map((product, index) => ({
-        id: product.id,
-        name: String(product.name || 'Produkt'),
-        category_id: product.category_id || product.category || null,
-        price: Number(product.price ?? product.unit_price ?? 0),
-        sale_price: Number(product.sale_price ?? 0),
-        image: product.image || null,
-        active: product.active !== false,
-        admin_item: Boolean(product.admin_item),
-        sort_order: Number(product.sort_order ?? index),
-      })).map(row => {
-        if (row.id && /^[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i.test(String(row.id))) {
-          return row;
+      bonuses,
+
+      categories
+
+    };
+
+
+    const blob =
+      new Blob(
+        [
+          JSON.stringify(
+            data,
+            null,
+            2
+          )
+        ],
+        {
+          type:
+            "application/json"
         }
-        const { id, ...withoutId } = row;
-        void id;
-        return withoutId;
-      });
+      );
 
-      if (productRows.length) {
-        const { error } = await supabase.from('products').upsert(productRows);
-        if (error) throw error;
-      }
-    }
 
-    if (Array.isArray(data.bonuses)) {
-      const bonusRows = data.bonuses.map(item => ({
-        threshold: Number(item.threshold ?? item.min ?? 0),
-        bonus_type: item.bonus_type || 'percent',
-        bonus_value: Number(item.bonus_value ?? item.percent ?? 0),
-        active: item.active !== false,
-      }));
+    const url =
+      URL.createObjectURL(
+        blob
+      );
 
-      const { error: deleteError } = await supabase.from('bonuses').delete().gte('threshold', 0);
-      if (deleteError) throw deleteError;
 
-      if (bonusRows.length) {
-        const { error: insertError } = await supabase.from('bonuses').insert(bonusRows);
-        if (insertError) throw insertError;
-      }
-    }
+    const a =
+      document.createElement(
+        "a"
+      );
 
-    await loadCatalog();
+
+    a.href =
+      url;
+
+
+    a.download =
+      "pointo-data.json";
+
+
+    a.click();
+
+
+    URL.revokeObjectURL(
+      url
+    );
+
   }
 
-  document.getElementById('importFile').addEventListener('change', async event => {
-    const file = event.target.files[0];
-    if (!file) return;
 
-    try {
-      await importDataFromJson(file);
-      alert('Data byla importována do Supabase.');
-    } catch (error) {
-      showError(error, 'Import se nepodařil.');
-    }
+  document
+    .getElementById(
+      "importFile"
+    )
+    .addEventListener(
+      "change",
+      async e => {
 
-    event.target.value = '';
-  });
+        const file =
+          e.target.files[0];
+
+
+        if(!file){
+
+          return;
+
+        }
+
+
+        try{
+
+          const text =
+            await file.text();
+
+
+          const data =
+            JSON.parse(
+              text
+            );
+
+
+          if(
+            Array.isArray(
+              data.products
+            )
+          ){
+
+            products =
+              data.products;
+
+
+            saveJson(
+              PRODUCTS_KEY,
+              products
+            );
+
+          }
+
+
+          if(
+            Array.isArray(
+              data.bonuses
+            )
+          ){
+
+            bonuses =
+              data.bonuses;
+
+
+            saveJson(
+              BONUS_KEY,
+              bonuses
+            );
+
+          }
+
+
+          if(
+            Array.isArray(
+              data.categories
+            )
+          ){
+
+            categories =
+              data.categories;
+
+
+            saveJson(
+              CATEGORIES_KEY,
+              categories
+            );
+
+          }
+
+
+          products =
+            products
+              .map(
+                normalizeProductCategory
+              )
+              .map(
+                product => ({
+                  ...product,
+                  sale_price:Number(product.sale_price ?? 0),
+                  admin_item:Boolean(product.admin_item)
+                })
+              );
+
+
+          saveJson(
+            PRODUCTS_KEY,
+            products
+          );
+
+
+          renderCategorySelect();
+
+          renderCategoryList();
+
+
+          renderProducts();
+
+          calculateTotal();
+
+
+          if(
+            isAdmin()
+          ){
+
+            renderAdminProducts();
+
+            renderBonusRows();
+
+          }
+
+
+          alert(
+            "Data byla importována."
+          );
+
+        }
+        catch(err){
+
+          alert(
+            "Import se nepodařil."
+          );
+
+        }
+
+
+        e.target.value =
+          "";
+
+      }
+    );
+
+
+  /* ========================================
+     OCHRANA TEXTU
+     ======================================== */
+
+  function escapeHtml(
+    value
+  ){
+
+    return String(value)
+
+      .replaceAll(
+        "&",
+        "&amp;"
+      )
+
+      .replaceAll(
+        "<",
+        "&lt;"
+      )
+
+      .replaceAll(
+        ">",
+        "&gt;"
+      )
+
+      .replaceAll(
+        '"',
+        "&quot;"
+      )
+
+      .replaceAll(
+        "'",
+        "&#039;"
+      );
+
+  }
+
 
   /* ========================================
      ENTER = LOGIN
      ======================================== */
 
-  document.getElementById('loginPass').addEventListener('keydown', event => {
-    if (event.key === 'Enter') login();
-  });
+  document
+    .getElementById(
+      "loginPass"
+    )
+    .addEventListener(
+      "keydown",
+      e => {
 
-  /* ========================================
-     GLOBÁLNÍ FUNKCE PRO HTML ONCLICK
-     ======================================== */
+        if(
+          e.key === "Enter"
+        ){
 
-  Object.assign(window, {
-    openLogin,
-    closeLogin,
-    login,
-    openAdmin,
-    closeAdmin,
-    logout,
-    resetProductForm,
-    saveProduct,
-    editProduct,
-    deleteProduct,
-    renderAdminProducts,
-    renderProducts,
-    changeQty,
-    resetCalculator,
-    addCategory,
-    getCategory,
-    getCategoryName,
-    getCategoryIcon,
-    renderCategorySelect,
-    renderCategoryList,
-    updateBonus,
-    addBonusTier,
-    removeBonusTier,
-    saveBonusTiers,
-    exportData,
-    calculateTotal,
-  });
+          login();
+
+        }
+
+      }
+    );
+
 
   /* ========================================
      START
      ======================================== */
 
   renderCategorySelect();
-  renderCategoryList();
-  updateAdminTopbar();
-  renderProducts();
-  calculateTotal();
 
-  if (isAdmin()) {
-    document.body.classList.add('admin-mode');
+  renderCategoryList();
+
+
+  if(isAdmin()){
+
+    document.body.classList.add(
+      "admin-mode"
+    );
+
   }
 
-  await loadCatalog();
+
   updateAdminTopbar();
+
   renderProducts();
+
   calculateTotal();
 
-  if (isAdmin()) openAdmin();
-  setupRealtime();
+
+  if(isAdmin()){
+
+    openAdmin();
+
+  }
 
 </script>
 
+<script>
+(function(){
+  const supabaseReady = import('./src/supabase.js')
+    .then(mod => mod.supabase)
+    .catch(error => {
+      console.error('Supabase se nepodařilo načíst:', error)
+      return null
+    })
+
+  let syncingFromServer = false
+  let syncTimer = null
+
+  function isUuid(value){
+    return typeof value === 'string' && /^[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i.test(value)
+  }
+
+  function refreshUi(){
+    try { renderCategorySelect() } catch(e) {}
+    try { renderCategoryList() } catch(e) {}
+    try { renderProducts() } catch(e) {}
+    try { renderAdminProducts() } catch(e) {}
+    try { renderBonusRows() } catch(e) {}
+    try { calculateTotal() } catch(e) {}
+  }
+
+  function saveLocalDirect(key, value){
+    try { localStorage.setItem(key, JSON.stringify(value)) } catch(e) { console.error(e) }
+  }
+
+  async function fetchServerState(supabase){
+    const [c, p, b] = await Promise.all([
+      supabase.from('categories').select('*').order('sort_order', {ascending:true}),
+      supabase.from('products').select('*').order('sort_order', {ascending:true}),
+      supabase.from('bonuses').select('*').eq('active', true).order('threshold', {ascending:false})
+    ])
+
+    for (const result of [c,p,b]) {
+      if (result.error) throw result.error
+    }
+
+    return {
+      categories: (c.data || []).map(row => ({
+        id: row.id,
+        name: row.name,
+        icon: row.icon || '📦',
+        sort_order: Number(row.sort_order || 0),
+        active: row.active !== false
+      })),
+      products: (p.data || []).map(row => ({
+        id: row.id,
+        name: row.name,
+        price: Number(row.price || 0),
+        sale_price: Number(row.sale_price || 0),
+        image: row.image || '',
+        category: row.category_id || '',
+        active: row.active !== false,
+        admin_item: Boolean(row.admin_item),
+        sort_order: Number(row.sort_order || 0)
+      })),
+      bonuses: (b.data || []).map(row => ({
+        id: row.id,
+        min: Number(row.threshold || 0),
+        percent: row.bonus_type === 'percent' ? Number(row.bonus_value || 0) : 0,
+        bonus_type: row.bonus_type || 'percent',
+        bonus_value: Number(row.bonus_value || 0)
+      }))
+    }
+  }
+
+  async function syncCategories(supabase){
+    const current = Array.isArray(categories) ? categories : []
+    const server = await supabase.from('categories').select('id')
+    if (server.error) throw server.error
+    const ids = new Set(current.map(c => c.id))
+    for (const row of (server.data || [])) {
+      if (!ids.has(row.id)) {
+        const result = await supabase.from('categories').delete().eq('id', row.id)
+        if (result.error) throw result.error
+      }
+    }
+    if (!current.length) return
+    const rows = current.map((c, index) => ({
+      id: c.id,
+      name: c.name,
+      icon: c.icon || '📦',
+      sort_order: Number(c.sort_order ?? index),
+      active: c.active !== false
+    }))
+    const result = await supabase.from('categories').upsert(rows, {onConflict:'id'})
+    if (result.error) throw result.error
+  }
+
+  async function syncProducts(supabase){
+    const current = Array.isArray(products) ? products : []
+    const server = await supabase.from('products').select('id')
+    if (server.error) throw server.error
+    const ids = new Set(current.filter(p => isUuid(p.id)).map(p => p.id))
+    for (const row of (server.data || [])) {
+      if (!ids.has(row.id)) {
+        const result = await supabase.from('products').delete().eq('id', row.id)
+        if (result.error) throw result.error
+      }
+    }
+    const rows = current.map((p, index) => {
+      const row = {
+        name: p.name,
+        category_id: p.category || null,
+        price: Number(p.price || 0),
+        sale_price: Number(p.sale_price || 0),
+        image: p.image || null,
+        active: p.active !== false,
+        admin_item: Boolean(p.admin_item),
+        sort_order: Number(p.sort_order ?? index)
+      }
+      if (isUuid(p.id)) row.id = p.id
+      return row
+    })
+    if (!rows.length) return
+    const result = await supabase.from('products').upsert(rows, {onConflict:'id'})
+    if (result.error) throw result.error
+  }
+
+  async function syncBonuses(supabase){
+    const current = Array.isArray(bonuses) ? bonuses : []
+    const existing = await supabase.from('bonuses').select('id')
+    if (existing.error) throw existing.error
+    for (const row of (existing.data || [])) {
+      const result = await supabase.from('bonuses').delete().eq('id', row.id)
+      if (result.error) throw result.error
+    }
+    if (!current.length) return
+    const rows = current.map(b => ({
+      id: isUuid(b.id) ? b.id : undefined,
+      threshold: Number(b.min || 0),
+      bonus_type: b.bonus_type || 'percent',
+      bonus_value: Number(b.bonus_type === 'fixed' ? (b.bonus_value || 0) : (b.percent || 0)),
+      active: true
+    })).map(row => {
+      if (!row.id) delete row.id
+      return row
+    })
+    const result = await supabase.from('bonuses').insert(rows)
+    if (result.error) throw result.error
+  }
+
+  async function initialSync(){
+    const supabase = await supabaseReady
+    if (!supabase) return
+
+    try {
+      let remote = await fetchServerState(supabase)
+      const localHasCategories = Array.isArray(categories) && categories.length > 0
+      const localHasProducts = Array.isArray(products) && products.length > 0
+      const localHasBonuses = Array.isArray(bonuses) && bonuses.length > 0
+
+      if (!remote.categories.length && localHasCategories) await syncCategories(supabase)
+      if (!remote.products.length && localHasProducts) await syncProducts(supabase)
+      if (!remote.bonuses.length && localHasBonuses) await syncBonuses(supabase)
+
+      remote = await fetchServerState(supabase)
+      syncingFromServer = true
+      categories = remote.categories
+      products = remote.products
+      bonuses = remote.bonuses
+      saveLocalDirect(CATEGORIES_KEY, categories)
+      saveLocalDirect(PRODUCTS_KEY, products)
+      saveLocalDirect(BONUS_KEY, bonuses)
+      syncingFromServer = false
+      refreshUi()
+    } catch (error) {
+      syncingFromServer = false
+      console.error('Supabase synchronizace selhala:', error)
+    }
+  }
+
+  async function pushKey(key){
+    if (syncingFromServer) return
+    const supabase = await supabaseReady
+    if (!supabase) return
+    try {
+      if (key === PRODUCTS_KEY) await syncProducts(supabase)
+      if (key === CATEGORIES_KEY) await syncCategories(supabase)
+      if (key === BONUS_KEY) await syncBonuses(supabase)
+    } catch (error) {
+      console.error('Supabase zápis selhal:', error)
+    }
+  }
+
+  const originalSaveJson = window.saveJson
+  window.saveJson = function(key, value){
+    originalSaveJson(key, value)
+    pushKey(key)
+  }
+
+  function scheduleRemoteRefresh(){
+    clearTimeout(syncTimer)
+    syncTimer = setTimeout(async () => {
+      const supabase = await supabaseReady
+      if (!supabase) return
+      try {
+        const remote = await fetchServerState(supabase)
+        syncingFromServer = true
+        categories = remote.categories
+        products = remote.products
+        bonuses = remote.bonuses
+        saveLocalDirect(CATEGORIES_KEY, categories)
+        saveLocalDirect(PRODUCTS_KEY, products)
+        saveLocalDirect(BONUS_KEY, bonuses)
+        syncingFromServer = false
+        refreshUi()
+      } catch (error) {
+        syncingFromServer = false
+        console.error('Realtime načtení selhalo:', error)
+      }
+    }, 250)
+  }
+
+  ;(async function setupRealtime(){
+    const supabase = await supabaseReady
+    if (!supabase) return
+    supabase
+      .channel('pointo-catalog-sync')
+      .on('postgres_changes', {event:'*', schema:'public', table:'categories'}, scheduleRemoteRefresh)
+      .on('postgres_changes', {event:'*', schema:'public', table:'products'}, scheduleRemoteRefresh)
+      .on('postgres_changes', {event:'*', schema:'public', table:'bonuses'}, scheduleRemoteRefresh)
+      .subscribe()
+
+    await initialSync()
+  })()
+})();
+</script>
