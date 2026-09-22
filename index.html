@@ -614,24 +614,52 @@
       transform: translateY(0);
     }
 
-    .admin-logout-top{
+    .customer-button{
       position:fixed;
       top:16px;
-      right:16px;
-      z-index:10060;
-      border:1px solid #db4f67;
-      background:rgba(28,5,12,.92);
-      color:#ffdce2;
+      left:104px;
+      z-index:10050;
+      border:1px solid #b887ff;
+      background:rgba(10,5,16,.90);
+      color:#fff;
       padding:9px 13px;
       border-radius:10px;
       cursor:pointer;
       font-weight:900;
       letter-spacing:1px;
-      box-shadow:0 0 18px rgba(219,79,103,.14);
+      box-shadow:0 0 18px rgba(184,29,255,.18);
     }
-    .admin-logout-top:hover{
-      background:#3a0d18;
-      box-shadow:0 0 20px rgba(219,79,103,.22);
+    .customer-button:hover{
+      background:#220b2d;
+      box-shadow:0 0 20px rgba(184,29,255,.28);
+    }
+    .customer-options{
+      display:grid;
+      gap:12px;
+      margin-top:8px;
+    }
+    .customer-option{
+      width:100%;
+      display:flex;
+      align-items:center;
+      justify-content:space-between;
+      gap:18px;
+      padding:14px 16px;
+      border:1px solid #4d2a5d;
+      border-radius:11px;
+      background:#14091b;
+      color:#fff;
+      cursor:pointer;
+      text-align:left;
+      font-weight:800;
+    }
+    .customer-option:hover{
+      border-color:var(--purple);
+      background:#210c2b;
+    }
+    .customer-option strong{
+      color:#e7c8ff;
+      white-space:nowrap;
     }
     .admin-only{display:none;}
     body.admin-mode .admin-only{display:block;}
@@ -1582,14 +1610,13 @@
 </button>
 
 <button
-  id="adminLogoutTop"
-  class="admin-logout-top"
-  onclick="logout()"
+  id="customerButton"
+  class="customer-button"
+  onclick="openCustomerPicker()"
   style="display:none;"
 >
-  ODHLÁSIT
+  ZÁKAZNÍK: KLASICKÝ
 </button>
-
 
 
 <div id="discordGate">
@@ -1838,6 +1865,43 @@
 
 
 <!-- =========================================
+     CUSTOMER TYPE
+     ========================================= -->
+
+<div
+  id="customerModal"
+  class="modal"
+>
+  <div class="dialog login">
+    <div class="dialog-header">
+      <div>
+        <h2>Typ zákazníka</h2>
+        <div class="admin-user">Vyber typ zákazníka pro výpočet bonusu.</div>
+      </div>
+      <button class="close" onclick="closeCustomerPicker()">×</button>
+    </div>
+
+    <div class="customer-options">
+      <button type="button" class="customer-option" onclick="selectCustomerType('classic')">
+        <span>Klasický zákazník</span>
+        <strong>0 % bonus</strong>
+      </button>
+
+      <button type="button" class="customer-option" onclick="selectCustomerType('second')">
+        <span>Zákazník 2</span>
+        <strong>+10 % bonus</strong>
+      </button>
+
+      <button type="button" class="customer-option" onclick="selectCustomerType('third')">
+        <span>Zákazník 3</span>
+        <strong>+20 % bonus</strong>
+      </button>
+    </div>
+  </div>
+</div>
+
+
+<!-- =========================================
      ADMIN ACCESS
      ========================================= -->
 
@@ -1868,7 +1932,7 @@
       class="login-note"
       style="font-size:14px;line-height:1.6;"
     >
-      Admin panel je dostupný pouze pro ZAMĚSTNANCE A MAJITELE.
+      Admin panel je dostupný pouze pro Discord roli Majitel.
     </div>
 
     <div class="login-actions">
@@ -2564,7 +2628,7 @@
 
     if(message){
       message.textContent =
-        "Admin panel je dostupný pouze pro ZAMĚSTNANCE A MAJITELE.";
+        "Admin panel je dostupný pouze pro Discord roli Majitel.";
     }
 
     if(modal){
@@ -2704,25 +2768,54 @@
   }
 
 
-  function updateAdminTopbar(){
+  const CUSTOMER_TYPES = {
+    classic: { label: "KLASICKÝ", name: "Klasický zákazník", percent: 0 },
+    second:  { label: "ZÁKAZNÍK 2", name: "Zákazník 2", percent: 10 },
+    third:   { label: "ZÁKAZNÍK 3", name: "Zákazník 3", percent: 20 }
+  };
 
-    const button =
-      document.getElementById(
-        "adminLogoutTop"
-      );
+  let selectedCustomerType = localStorage.getItem("pointo_customer_type") || "classic";
+  if(!CUSTOMER_TYPES[selectedCustomerType]) selectedCustomerType = "classic";
 
-    if(button){
+  function updateCustomerButton(){
+    const button = document.getElementById("customerButton");
+    if(!button) return;
 
-      button.style.display =
-        isAdmin()
-          ? "block"
-          : "none";
-
-      button.textContent =
-        "ZAVŘÍT ADMIN";
-
+    if(isAdmin()){
+      const type = CUSTOMER_TYPES[selectedCustomerType] || CUSTOMER_TYPES.classic;
+      button.style.display = "block";
+      button.textContent = "ZÁKAZNÍK: " + type.label;
+    }else{
+      button.style.display = "none";
     }
+  }
 
+  function openCustomerPicker(){
+    if(!isAdmin()) return openLogin();
+
+    const modal = document.getElementById("customerModal");
+    if(modal) modal.classList.add("open");
+  }
+
+  function closeCustomerPicker(){
+    const modal = document.getElementById("customerModal");
+    if(modal) modal.classList.remove("open");
+  }
+
+  function selectCustomerType(type){
+    if(!isAdmin()) return openLogin();
+    if(!CUSTOMER_TYPES[type]) return;
+
+    selectedCustomerType = type;
+    localStorage.setItem("pointo_customer_type", type);
+
+    updateCustomerButton();
+    closeCustomerPicker();
+    calculateTotal();
+  }
+
+  function updateAdminTopbar(){
+    updateCustomerButton();
   }
 
 
@@ -4057,9 +4150,15 @@
     total
   ){
 
-    if (window.pointoDiscordSession &&
-        Number(window.pointoDiscordSession.bonusPercent || 0) > 0) {
-      return Number(window.pointoDiscordSession.bonusPercent) / 100;
+    // Majitel vybírá typ zákazníka ručně.
+    // Pro ostatní prodejce zůstává bonus podle jejich Discord role.
+    if(isAdmin()){
+      const type = CUSTOMER_TYPES[selectedCustomerType] || CUSTOMER_TYPES.classic;
+      return Number(type.percent || 0) / 100;
+    }
+
+    if (window.pointoDiscordSession) {
+      return Number(window.pointoDiscordSession.bonusPercent || 0) / 100;
     }
 
     return 0;
@@ -5073,7 +5172,7 @@ async function loadDiscordSession(){
     document.getElementById('orderButton').disabled = false;
     document.getElementById('orderStatus').textContent =
       'Přihlášen jako ' + (data.user.global_name || data.user.username || 'Discord uživatel') +
-      (Number(data.bonusPercent || 0) > 0 ? ' • bonus: +' + Number(data.bonusPercent) + ' %' : '');
+      (Number(data.bonusPercent || 0) > 0 ? ' • bonus role: +' + Number(data.bonusPercent) + ' %' : '');
     // ADMIN panel se řídí aktuální Discord rolí.
     if(isAdmin()){
       document.body.classList.add("admin-mode");
