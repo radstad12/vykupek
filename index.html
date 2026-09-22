@@ -1838,7 +1838,7 @@
 
 
 <!-- =========================================
-     LOGIN
+     ADMIN ACCESS
      ========================================= -->
 
 <div
@@ -1850,8 +1850,8 @@
 
     <div class="dialog-header">
 
-      <h2>
-        Admin přihlášení
+      <h2 id="loginAccessTitle">
+        Přístup odepřen
       </h2>
 
       <button
@@ -1863,66 +1863,23 @@
 
     </div>
 
-
-    <div class="field">
-
-      <label>
-        Uživatelské jméno
-      </label>
-
-      <input
-        id="loginUser"
-        autocomplete="username"
-      >
-
-    </div>
-
-
     <div
-      class="field"
-      style="margin-top:12px;"
+      id="loginAccessMessage"
+      class="login-note"
+      style="font-size:14px;line-height:1.6;"
     >
-
-      <label>
-        Heslo
-      </label>
-
-      <input
-        id="loginPass"
-        type="password"
-        autocomplete="current-password"
-      >
-
+      Admin panel je dostupný pouze pro Discord roli Majitel.
     </div>
-
 
     <div class="login-actions">
 
-      <div class="login-note">
-        Pouze pro administrátora.
-        Registrace není k dispozici.
-      </div>
-
       <button
-        class="primary"
-        onclick="login()"
+        class="secondary"
+        onclick="closeLogin()"
       >
-        Přihlásit
+        Zavřít
       </button>
 
-    </div>
-
-
-    <div
-      id="loginError"
-      class="hidden"
-      style="
-        margin-top:12px;
-        color:#ffabb7;
-        font-weight:800;
-      "
-    >
-      Nesprávné přihlašovací údaje.
     </div>
 
   </div>
@@ -1949,8 +1906,8 @@
           POINTO Admin
         </h2>
 
-        <div class="admin-user">
-          Přihlášen jako chicano
+        <div id="adminCurrentUser" class="admin-user">
+          Přihlášen jako Discord uživatel - Majitel
         </div>
 
       </div>
@@ -2315,10 +2272,10 @@
     >
 
       <button
-        class="danger"
+        class="secondary"
         onclick="logout()"
       >
-        Odhlásit se
+        Zavřít admin
       </button>
 
     </div>
@@ -2340,21 +2297,11 @@
    * napojíme Supabase.
    */
 
-  const ADMIN_USER =
-    "chicano";
-
-  const ADMIN_PASS =
-    "Fuckingmcmechiko";
-
-
   const PRODUCTS_KEY =
     "pointo_products_v2";
 
   const BONUS_KEY =
     "pointo_bonus_v2";
-
-  const SESSION_KEY =
-    "pointo_admin_session_v3";
 
   const CATEGORIES_KEY =
     "pointo_categories_v1";
@@ -2587,98 +2534,82 @@
 
   function openLogin(){
 
-    document
-      .getElementById(
-        "loginModal"
-      )
-      .classList.add(
-        "open"
-      );
+    // ADMIN není samostatné přihlášení.
+    // Přístup určuje aktuální Discord role.
+    if(isAdmin()){
 
-    document
-      .getElementById(
-        "loginUser"
-      )
-      .focus();
+      document.body.classList.add("admin-mode");
+      updateAdminTopbar();
+      renderProducts();
+      calculateTotal();
+      openAdmin();
+      return;
+
+    }
+
+    // Uživatel bez role Majitel dostane pouze informaci
+    // o odepřeném přístupu.
+    const modal =
+      document.getElementById("loginModal");
+
+    const title =
+      document.getElementById("loginAccessTitle");
+
+    const message =
+      document.getElementById("loginAccessMessage");
+
+    if(title){
+      title.textContent = "Přístup odepřen";
+    }
+
+    if(message){
+      message.textContent =
+        "Admin panel je dostupný pouze pro Discord roli Majitel.";
+    }
+
+    if(modal){
+      modal.classList.add("open");
+    }
 
   }
 
 
   function closeLogin(){
 
-    document
-      .getElementById(
-        "loginModal"
-      )
-      .classList.remove(
-        "open"
-      );
+    const modal =
+      document.getElementById("loginModal");
 
-    document
-      .getElementById(
-        "loginError"
-      )
-      .classList.add(
-        "hidden"
-      );
-
-  }
-
-
-  function login(){
-
-    const user =
-      document
-        .getElementById(
-          "loginUser"
-        )
-        .value
-        .trim();
-
-
-    const pass =
-      document
-        .getElementById(
-          "loginPass"
-        )
-        .value;
-
-
-    if(
-      user === ADMIN_USER &&
-      pass === ADMIN_PASS
-    ){
-
-      localStorage.setItem(
-        SESSION_KEY,
-        "1"
-      );
-
-      document.body.classList.add("admin-mode");
-      updateAdminTopbar();
-      renderProducts();
-      calculateTotal();
-
-      closeLogin();
-      openAdmin();
-
-    }else{
-
-      document
-        .getElementById(
-          "loginError"
-        )
-        .classList
-        .remove(
-          "hidden"
-        );
-
+    if(modal){
+      modal.classList.remove("open");
     }
 
   }
 
 
+  // Staré login tlačítko už není potřeba.
+  // Ponecháváme funkci kvůli případným starým onclickům.
+  function login(){
+
+    if(isAdmin()){
+      closeLogin();
+      openAdmin();
+      return;
+    }
+
+    openLogin();
+
+  }
+
+
   function openAdmin(){
+
+    if(!isAdmin()){
+
+      closeAdmin();
+      openLogin();
+      return;
+
+    }
 
     renderCategorySelect();
 
@@ -2687,6 +2618,28 @@
     renderAdminProducts();
 
     renderBonusRows();
+
+    const userEl =
+      document.getElementById("adminCurrentUser");
+
+    if(userEl){
+
+      const user =
+        window.pointoDiscordUser ||
+        window.pointoDiscordSession?.user ||
+        null;
+
+      const name =
+        user?.global_name ||
+        user?.username ||
+        "Discord uživatel";
+
+      userEl.textContent =
+        "Přihlášen jako " +
+        name +
+        " - Majitel";
+
+    }
 
     document
       .getElementById(
@@ -2716,21 +2669,23 @@
 
   function logout(){
 
-    localStorage.removeItem(
-      SESSION_KEY
-    );
+    // Neodhlašujeme Discord.
+    // Pouze zavřeme admin panel.
+    closeAdmin();
 
-    document.body.classList.remove(
-      "admin-mode"
-    );
+    if(!isAdmin()){
+
+      document.body.classList.remove(
+        "admin-mode"
+      );
+
+    }
 
     updateAdminTopbar();
 
-    closeAdmin();
-
     renderProducts();
 
-    resetCalculator();
+    calculateTotal();
 
   }
 
@@ -2740,13 +2695,11 @@
       window.pointoDiscordRoles.includes('1551640037828075620');
   }
 
+
   function isAdmin(){
 
-    return(
-      localStorage.getItem(
-        SESSION_KEY
-      ) === "1"
-    );
+    // ADMIN přístup je pouze podle aktuální Discord role.
+    return isDiscordOwner();
 
   }
 
@@ -2764,6 +2717,9 @@
         isAdmin()
           ? "block"
           : "none";
+
+      button.textContent =
+        "ZAVŘÍT ADMIN";
 
     }
 
@@ -4814,11 +4770,8 @@
   calculateTotal();
 
 
-  if(isAdmin()){
-
-    openAdmin();
-
-  }
+  // Admin panel se neotevírá automaticky.
+  // Otevře ho tlačítko ADMIN po kontrole Discord role.
 
 </script>
 
@@ -5099,6 +5052,9 @@ async function loadDiscordSession(){
   }
   const token = discordToken();
   if(!token){
+    document.body.classList.remove("admin-mode");
+    updateAdminTopbar();
+    closeAdmin();
     lockDiscordGate();
     return;
   }
@@ -5118,10 +5074,23 @@ async function loadDiscordSession(){
     document.getElementById('orderStatus').textContent =
       'Přihlášen jako ' + (data.user.global_name || data.user.username || 'Discord uživatel') +
       (Number(data.bonusPercent || 0) > 0 ? ' • bonus role: +' + Number(data.bonusPercent) + ' %' : '');
+    // ADMIN panel se řídí aktuální Discord rolí.
+    if(isAdmin()){
+      document.body.classList.add("admin-mode");
+      updateAdminTopbar();
+    }else{
+      document.body.classList.remove("admin-mode");
+      updateAdminTopbar();
+      closeAdmin();
+    }
+
     applyDiscordCatalog();
   }catch(error){
     console.error(error);
     setDiscordToken('');
+    document.body.classList.remove("admin-mode");
+    updateAdminTopbar();
+    closeAdmin();
     lockDiscordGate(error.message || 'Přihlášení se nepodařilo.');
   }
 }
