@@ -1868,7 +1868,7 @@
       class="login-note"
       style="font-size:14px;line-height:1.6;"
     >
-      Admin panel je dostupný pouze pro Discord roli Majitel.
+      Admin panel je dostupný pouze pro ZAMĚSTNANCE A MAJITELE.
     </div>
 
     <div class="login-actions">
@@ -5073,7 +5073,7 @@ async function loadDiscordSession(){
     document.getElementById('orderButton').disabled = false;
     document.getElementById('orderStatus').textContent =
       'Přihlášen jako ' + (data.user.global_name || data.user.username || 'Discord uživatel') +
-      (Number(data.bonusPercent || 0) > 0 ? ' • bonus role: +' + Number(data.bonusPercent) + ' %' : '');
+      (Number(data.bonusPercent || 0) > 0 ? ' • bonus: +' + Number(data.bonusPercent) + ' %' : '');
     // ADMIN panel se řídí aktuální Discord rolí.
     if(isAdmin()){
       document.body.classList.add("admin-mode");
