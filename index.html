@@ -617,7 +617,7 @@
     .customer-button{
       position:fixed;
       top:16px;
-      left:104px;
+      left:120px;
       z-index:10050;
       border:1px solid #b887ff;
       background:rgba(10,5,16,.90);
@@ -1883,18 +1883,15 @@
 
     <div class="customer-options">
       <button type="button" class="customer-option" onclick="selectCustomerType('classic')">
-        <span>Klasický zákazník</span>
-        <strong>0 % bonus</strong>
+        <span>0 %</span>
       </button>
 
       <button type="button" class="customer-option" onclick="selectCustomerType('second')">
-        <span>Zákazník 2</span>
-        <strong>+10 % bonus</strong>
+        <span>10 %</span>
       </button>
 
       <button type="button" class="customer-option" onclick="selectCustomerType('third')">
-        <span>Zákazník 3</span>
-        <strong>+20 % bonus</strong>
+        <span>20 %</span>
       </button>
     </div>
   </div>
@@ -2784,7 +2781,7 @@
     if(isAdmin()){
       const type = CUSTOMER_TYPES[selectedCustomerType] || CUSTOMER_TYPES.classic;
       button.style.display = "block";
-      button.textContent = "ZÁKAZNÍK: " + type.label;
+      button.textContent = "BONUS: " + Number(type.percent || 0) + " %";
     }else{
       button.style.display = "none";
     }
