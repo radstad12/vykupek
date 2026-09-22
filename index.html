@@ -134,22 +134,23 @@
     }
 
     .feature-icon{
-      height:27px;
+      height:32px;
       margin-bottom:8px;
+      display:flex;
+      align-items:center;
+      justify-content:center;
     }
 
-    .feature-icon::before{
-      content:"";
-      display:inline-block;
+    .feature-icon svg{
+      width:29px;
+      height:29px;
+      display:block;
+      color:var(--gold2);
+      filter:drop-shadow(0 0 7px rgba(167,44,255,.22));
+    }
 
-      width:23px;
-      height:23px;
-
-      border:2px solid var(--gold2);
-      border-radius:50%;
-
-      box-shadow:
-        0 0 0 3px rgba(167,44,255,.18);
+    .feature-icon svg *{
+      vector-effect:non-scaling-stroke;
     }
 
     .feature-title{
@@ -1649,7 +1650,11 @@
   <section class="features">
 
     <div class="feature">
-      <div class="feature-icon"></div>
+      <div class="feature-icon" aria-hidden="true">
+        <svg viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg">
+          <path d="M13 2L4.5 13H11L10 22L19.5 10.5H13L13 2Z" fill="currentColor"/>
+        </svg>
+      </div>
 
       <span class="feature-title">
         RYCHLÝ VÝKUP
@@ -1662,7 +1667,15 @@
 
 
     <div class="feature">
-      <div class="feature-icon"></div>
+      <div class="feature-icon" aria-hidden="true">
+        <svg viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg">
+          <path d="M12 3V21" stroke="currentColor" stroke-width="1.9" stroke-linecap="round"/>
+          <path d="M5 6H19" stroke="currentColor" stroke-width="1.9" stroke-linecap="round"/>
+          <path d="M7 6L4 12C4 14.2 5.8 15.5 7 15.5C8.2 15.5 10 14.2 10 12L7 6Z" stroke="currentColor" stroke-width="1.9" stroke-linejoin="round"/>
+          <path d="M17 6L14 12C14 14.2 15.8 15.5 17 15.5C18.2 15.5 20 14.2 20 12L17 6Z" stroke="currentColor" stroke-width="1.9" stroke-linejoin="round"/>
+          <path d="M8 21H16" stroke="currentColor" stroke-width="1.9" stroke-linecap="round"/>
+        </svg>
+      </div>
 
       <span class="feature-title">
         FAIR CENY
@@ -1675,7 +1688,14 @@
 
 
     <div class="feature">
-      <div class="feature-icon"></div>
+      <div class="feature-icon" aria-hidden="true">
+        <svg viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg">
+          <path d="M3 3L21 21" stroke="currentColor" stroke-width="1.9" stroke-linecap="round"/>
+          <path d="M10.6 5.2C11.05 5.08 11.52 5 12 5C16.5 5 20 9.5 21 12C20.55 13.08 19.62 14.6 18.15 16.05" stroke="currentColor" stroke-width="1.9" stroke-linecap="round" stroke-linejoin="round"/>
+          <path d="M6.3 7.1C4.66 8.55 3.5 10.55 3 12C4 14.5 7.5 19 12 19C13.18 19 14.32 18.65 15.35 18.08" stroke="currentColor" stroke-width="1.9" stroke-linecap="round" stroke-linejoin="round"/>
+          <path d="M9.3 9.3C8.64 10.04 8.25 10.98 8.25 12C8.25 14.07 9.93 15.75 12 15.75C13.02 15.75 13.96 15.36 14.7 14.7" stroke="currentColor" stroke-width="1.9" stroke-linecap="round"/>
+        </svg>
+      </div>
 
       <span class="feature-title">
         DISKRÉTNÍ JEDNÁNÍ
@@ -1688,7 +1708,14 @@
 
 
     <div class="feature">
-      <div class="feature-icon"></div>
+      <div class="feature-icon" aria-hidden="true">
+        <svg viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg">
+          <path d="M8.5 12.5L10.2 14.2C11 15 12.3 15 13.1 14.2L16.9 10.4C17.7 9.6 19 9.6 19.8 10.4C20.6 11.2 20.6 12.5 19.8 13.3L15.1 18C13.4 19.7 10.6 19.7 8.9 18L4.7 13.8C3.9 13 3.9 11.7 4.7 10.9C5.5 10.1 6.8 10.1 7.6 10.9L8.5 11.8" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"/>
+          <path d="M8.4 12.4L6.8 10.8C6 10 6 8.7 6.8 7.9C7.6 7.1 8.9 7.1 9.7 7.9L11.3 9.5" stroke="currentColor" stroke-width="1.8" stroke-linecap="round"/>
+          <path d="M11.2 9.4L10.1 8.3C9.3 7.5 9.3 6.2 10.1 5.4C10.9 4.6 12.2 4.6 13 5.4L16.2 8.6" stroke="currentColor" stroke-width="1.8" stroke-linecap="round"/>
+          <path d="M13.9 8.6L13 7.7C12.2 6.9 12.2 5.6 13 4.8C13.8 4 15.1 4 15.9 4.8L19.1 8" stroke="currentColor" stroke-width="1.8" stroke-linecap="round"/>
+        </svg>
+      </div>
 
       <span class="feature-title">
         FÉROVÉ PODMÍNKY
