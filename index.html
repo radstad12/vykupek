@@ -2102,6 +2102,24 @@
           </div>
 
           <div class="field full">
+
+            <label class="checkline">
+
+              <input
+                id="pBonusAllowed"
+                type="checkbox"
+                checked
+              >
+
+              Na tento produkt lze uplatnit bonus
+
+            </label>
+
+            <div class="hint">Když vypnete, tento produkt se do bonusu vůbec nezapočítá.</div>
+
+          </div>
+
+          <div class="field full">
             <label>
               Discord role ID pro zobrazení produktu (volitelné)
             </label>
@@ -2554,6 +2572,7 @@
           ...product,
           sale_price:Number(product.sale_price ?? 0),
           admin_item:Boolean(product.admin_item),
+          bonus_allowed: product.bonus_allowed !== false,
           required_role_id:String(product.required_role_id || "")
         })
       );
@@ -2884,6 +2903,12 @@
 
     document
       .getElementById(
+        "pBonusAllowed"
+      )
+      .checked = true;
+
+    document
+      .getElementById(
         "pRequiredRoleId"
       )
       .value = "";
@@ -2993,6 +3018,13 @@
         )
         .checked;
 
+    const bonusAllowed =
+      document
+        .getElementById(
+          "pBonusAllowed"
+        )
+        .checked;
+
     const requiredRoleId =
       document
         .getElementById(
@@ -3079,6 +3111,9 @@
         item.admin_item =
           adminItem;
 
+        item.bonus_allowed =
+          bonusAllowed;
+
         item.required_role_id =
           requiredRoleId;
 
@@ -3122,6 +3157,9 @@
 
         admin_item:
           adminItem,
+
+        bonus_allowed:
+          bonusAllowed,
 
         required_role_id:
           requiredRoleId
@@ -3235,6 +3273,13 @@
         Boolean(
           item.admin_item
         );
+
+    document
+      .getElementById(
+        "pBonusAllowed"
+      )
+      .checked =
+        item.bonus_allowed !== false;
 
     document
       .getElementById(
@@ -3391,6 +3436,14 @@
                     p.active
                     ? "aktivní"
                     : "skrytý"
+                  }
+
+                  ·
+
+                  ${
+                    p.bonus_allowed !== false
+                    ? "bonus povolen"
+                    : "bonus zakázán"
                   }
 
                 </div>
@@ -4169,6 +4222,7 @@
   function calculateTotal(){
 
     let subtotal = 0;
+    let bonusSubtotal = 0;
     let saleTotal = 0;
 
 
@@ -4199,11 +4253,19 @@
               ) || 0;
 
 
-            subtotal +=
+            const itemSubtotal =
               quantity *
               Number(
                 p.price || 0
               );
+
+            subtotal +=
+              itemSubtotal;
+
+            if(p.bonus_allowed !== false){
+              bonusSubtotal +=
+                itemSubtotal;
+            }
 
 
             if(isAdmin()){
@@ -4229,7 +4291,7 @@
 
 
     const bonus =
-      subtotal * rate;
+      bonusSubtotal * rate;
 
 
     const customerPayout =
@@ -4726,6 +4788,7 @@
                   ...product,
                   sale_price:Number(product.sale_price ?? 0),
                   admin_item:Boolean(product.admin_item),
+                  bonus_allowed: product.bonus_allowed !== false,
           required_role_id:String(product.required_role_id || "")
                 })
               );
@@ -4928,6 +4991,7 @@
         category: row.category_id || '',
         active: row.active !== false,
         admin_item: Boolean(row.admin_item),
+        bonus_allowed: row.bonus_allowed !== false,
         required_role_id: String(row.required_role_id || ''),
         sort_order: Number(row.sort_order || 0)
       })),
@@ -4985,6 +5049,7 @@
         image: p.image || null,
         active: p.active !== false,
         admin_item: Boolean(p.admin_item),
+        bonus_allowed: p.bonus_allowed !== false,
         required_role_id: String(p.required_role_id || ''),
         sort_order: Number(p.sort_order ?? index)
       }
